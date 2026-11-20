@@ -6,6 +6,16 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   // Relative base so the built app works from any path (e.g. GitHub Pages /repo/).
   base: './',
+  build: {
+    rollupOptions: {
+      output: {
+        // The PDF reader's worker ships as .mjs. Give it a .js name so every host,
+        // including the desktop window, serves it as JavaScript.
+        assetFileNames: (asset) =>
+          asset.names?.some((n) => n.endsWith('.mjs')) ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]',
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -14,6 +24,11 @@ export default defineConfig({
       // Registered by hand in src/main.tsx, so the desktop window can skip it.
       injectRegister: false,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      // The PDF reader's worker is about 1.3 MB; keep it available offline too.
+      workbox: {
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+      },
       manifest: {
         name: 'Isekai Habits',
         short_name: 'Isekai Habits',

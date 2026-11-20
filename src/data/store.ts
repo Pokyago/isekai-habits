@@ -9,7 +9,7 @@ import { useFx } from './fx';
 import { emptySave, parseSave, serializeSave } from './merge';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, TxInput } from '../money/actions';
-import type { ImportRow } from '../money/ofx';
+import type { ImportRow } from '../money/statement';
 import type { HabitTemplate } from './templates';
 import type { DateStr, Difficulty, HeroClass, SaveData, StatKey } from './types';
 

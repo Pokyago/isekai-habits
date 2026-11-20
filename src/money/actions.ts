@@ -14,7 +14,7 @@ import { parseDate } from '../game/dates';
 import { balance, debtRemaining, goalSaved, monthSummary } from './calc';
 import { ADJUSTMENT } from './categories';
 import { addMonths, dayInMonth, monthOf } from './format';
-import type { ImportRow } from './ofx';
+import type { ImportRow } from './statement';
 
 /*
  * Every change to the money records goes through these functions. Like the game

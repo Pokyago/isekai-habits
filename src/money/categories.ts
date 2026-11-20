@@ -16,6 +16,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { id: 'shopping', name: 'Shopping' },
   { id: 'education', name: 'Education' },
   { id: 'subscriptions', name: 'Subscriptions' },
+  { id: 'card', name: 'Credit card bill' },
   { id: 'debt', name: 'Debt payment' },
   { id: 'savings', name: 'Savings' },
   { id: 'other', name: 'Other' },
@@ -24,6 +25,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
 export const INCOME_CATEGORIES: Category[] = [
   { id: 'salary', name: 'Salary' },
   { id: 'extra', name: 'Extra income' },
+  { id: 'interest', name: 'Interest' },
   { id: 'refund', name: 'Refund' },
   { id: 'other-income', name: 'Other income' },
 ];
@@ -54,18 +56,20 @@ const RULES: [RegExp, string][] = [
   [/uber|99 ?app|99 ?pop|posto|combust|gasolina|estaciona|metro|metrô|onibus|ônibus|bilhete|pedagio|pedágio/i, 'transport'],
   [/netflix|spotify|prime video|amazon prime|disney|hbo|youtube|icloud|apple\.com|google one|assinatura/i, 'subscriptions'],
   [/farmacia|farmácia|drogaria|droga ?raia|drogasil|hospital|clinica|clínica|unimed|laborat/i, 'health'],
-  [/aluguel|condominio|condomínio|iptu/i, 'housing'],
-  [/energia|enel|cemig|copel|light |sabesp|agua|água|internet|vivo|claro|tim |oi fibra|telefone|gas |gás/i, 'bills'],
+  [/aluguel|condom[ií]ni|iptu/i, 'housing'],
+  [/energia|enel|cemig|copel|ceee|light |sabesp|agua|água|internet|vivo|claro|tim |oi fibra|telefone|gas |gás|consigaz|comgas|seguro/i, 'bills'],
   [/steam|playstation|xbox|nintendo|cinema|ingresso|show /i, 'fun'],
   [/curso|udemy|alura|faculdade|escola|livraria|mensalidade/i, 'education'],
   [/amazon|mercado ?livre|shopee|magalu|magazine|americanas|aliexpress|shein/i, 'shopping'],
-  [/emprestimo|empréstimo|financiamento|parcela|fatura|juros/i, 'debt'],
-  [/poupanca|poupança|investimento|aplicacao|aplicação|cdb|tesouro/i, 'savings'],
+  [/fatura/i, 'card'],
+  [/emprestimo|empréstimo|financiamento|parcela|credi[aá]rio|juros/i, 'debt'],
+  [/poupanca|poupança|invest|aplicacao|aplicação|cdb|tesouro/i, 'savings'],
 ];
 
 const INCOME_RULES: [RegExp, string][] = [
-  [/salario|salário|folha|pagamento de sal|proventos/i, 'salary'],
-  [/estorno|reembolso|devolucao|devolução/i, 'refund'],
+  [/salario|salário|remunera|folha|proventos/i, 'salary'],
+  [/estorno|reembolso|devolu|devolvid/i, 'refund'],
+  [/rendimento|rend pago/i, 'interest'],
 ];
 
 /** A first guess at the category from a bank statement's description. The user can change it. */

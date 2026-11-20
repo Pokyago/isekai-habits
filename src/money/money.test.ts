@@ -7,7 +7,10 @@ import type { TxInput } from './actions';
 import { balance, budgetStatus, debtRemaining, goalSaved, monthSummary, perMonthNeeded } from './calc';
 import { guessCategory } from './categories';
 import { addMonths, amountText, dayInMonth, formatMoney, monthsBetween, parseAmount } from './format';
-import { decodeBankFile, parseOfx, planImport } from './ofx';
+import { isItauStatement, parseItau, type PdfLine } from './itau';
+import { decodeBankFile, parseOfx } from './ofx';
+import { groupLines } from './pdfLines';
+import { planImport } from './statement';
 
 const TODAY = '2026-11-20';
 
@@ -259,7 +262,7 @@ describe('bank statement import', () => {
   it('reads movements and the closing balance from an OFX file', () => {
     const s = parseOfx(OFX);
     expect(s.entries.length).toBe(4);
-    expect(s.entries[0]).toEqual({ date: '2026-11-18', amount: -4590, fitid: '202611180001', memo: 'IFOOD *RESTAURANTE' });
+    expect(s.entries[0]).toEqual({ date: '2026-11-18', amount: -4590, key: '202611180001', memo: 'IFOOD *RESTAURANTE' });
     expect(s.entries[1].amount).toBe(350000);
     expect(s.entries[2].memo).toBe('UBER · UBER *TRIP');
     expect(s.balance).toEqual({ amount: 432109, date: '2026-11-20' });
@@ -300,6 +303,169 @@ describe('bank statement import', () => {
     d = money.deleteTransaction(d, id, 60);
     d = money.importRows(d, planImport(d, parseOfx(OFX)), TODAY, 70);
     expect(d.transactions[id].deleted).toBe(true);
+  });
+});
+
+// A made-up statement in the Itaú PDF layout: text items at the x positions the real one uses.
+const COLS = { date: 39.7, kind: 99.9, desc: 256.2, value: 466.7, balance: 551.7 };
+const header: PdfLine = {
+  items: [
+    { x: 39.7, w: 24, text: 'Data' },
+    { x: 99.9, w: 69, text: 'Lançamentos' },
+    { x: 256.2, w: 51, text: 'Descrição' },
+    { x: 416.3, w: 50, text: 'Valor (R$)' },
+    { x: 500.1, w: 52, text: 'Saldo (R$)' },
+  ],
+};
+const one = (text: string, x = 39.7): PdfLine => ({ items: [{ x, w: text.length * 5.5, text }] });
+/** Amounts are right-aligned: where they start depends on how wide they are. */
+const amount = (text: string, right: number) => ({ x: right - text.length * 5.6, w: text.length * 5.6, text });
+const row = (date: string, kind: string, desc: string, value: string): PdfLine => ({
+  items: [
+    { x: COLS.date, w: 48, text: date },
+    { x: COLS.kind, w: kind.length * 6, text: kind },
+    { x: COLS.desc, w: desc.length * 6, text: desc },
+    amount(value, COLS.value),
+  ],
+});
+const closing = (date: string, value: string): PdfLine => ({
+  items: [{ x: COLS.date, w: 48, text: date }, amount(value, COLS.balance)],
+});
+const wrap = (kind: string | null, desc: string | null): PdfLine => ({
+  items: [
+    ...(kind ? [{ x: COLS.kind, w: kind.length * 6, text: kind }] : []),
+    ...(desc ? [{ x: COLS.desc, w: desc.length * 6, text: desc }] : []),
+  ],
+});
+
+const ITAU: PdfLine[] = [
+  one('FULANO DE TAL', 400),
+  one('Saldo em conta'),
+  one('R$ 1.234,56'),
+  one('Extrato conta corrente'),
+  {
+    items: [
+      { x: 39.7, w: 229, text: 'Período de visualização: 01/10/2026 até 20/11/2026' },
+      { x: 411, w: 145, text: 'Emitido em: 20/11/2026 00:08:21' },
+    ],
+  },
+  one('Lançamentos futuros'),
+  one('Saídas futuras'),
+  header,
+  row('23/11/2026', 'DÉBITO AUTOMÁTICO', 'DA OPERADORA 123', '-99,90'),
+  one('Lançamentos'),
+  header,
+  row('19/11/2026', 'SALÁRIO', 'EMPRESA EXEMPLO', '5.000,00'),
+  wrap(null, 'CONSULTORIA LTDA'),
+  closing('18/11/2026', '1.234,54'),
+  row('18/11/2026', 'PIX ENVIADO', 'MARIA DA SILVA', '-50,00'),
+  header, // a new page repeats the header
+  closing('17/11/2026', '1.284,54'),
+  row('17/11/2026', 'PAGAMENTO DE PIX QR', 'IFOOD.COM AGENCIA DE', '-60,00'),
+  wrap('CODE', 'RESTAURANTES ONLINE'),
+  wrap(null, 'S.A.'),
+  row('17/11/2026', 'PAGAMENTO DE FATURA', 'FATURA PAGA', '-9.000,00'),
+  row('17/11/2026', 'RENDIMENTOS', 'REND PAGO APLIC AUT', '0,01'),
+  row('16/11/2026', 'PIX ENVIADO', 'PIX ENVIADO', '-200,00'),
+  row('16/11/2026', 'PIX ENVIADO', 'PIX ENVIADO', '-200,00'),
+  closing('13/11/2026', '10.744,53'),
+  row('13/11/2026', 'SAÍDA', 'CEEE 000000000000', '-300,00'),
+  closing('30/10/2026', '11.044,53'),
+  one('Posição consolidada'),
+  { items: [{ x: 39.7, w: 50, text: 'Descrição' }, { x: 480, w: 30, text: 'Valor' }] },
+  { items: [{ x: 39.7, w: 200, text: 'saldo disponível' }, amount('R$ 1.234,56', 551.7)] },
+];
+
+describe('Itaú PDF statement', () => {
+  it('reads movements, wrapped text and the headline balance, and skips future items', () => {
+    expect(isItauStatement(ITAU)).toBe(true);
+    const s = parseItau(ITAU);
+    expect(s.format).toBe('Itaú PDF');
+    expect(s.balance).toEqual({ amount: 123456, date: '2026-11-20' });
+    expect(s.entries.map((e) => [e.date, e.amount, e.memo])).toEqual([
+      ['2026-11-19', 500000, 'EMPRESA EXEMPLO CONSULTORIA LTDA'],
+      ['2026-11-18', -5000, 'MARIA DA SILVA'],
+      ['2026-11-17', -6000, 'IFOOD.COM AGENCIA DE RESTAURANTES ONLINE S.A.'],
+      ['2026-11-17', -900000, 'FATURA PAGA'],
+      ['2026-11-17', 1, 'REND PAGO APLIC AUT'],
+      ['2026-11-16', -20000, 'PIX ENVIADO'],
+      ['2026-11-16', -20000, 'PIX ENVIADO'],
+      ['2026-11-13', -30000, 'CEEE 000000000000'],
+    ]);
+    expect(s.entries[2].hint).toBe('PAGAMENTO DE PIX QR CODE');
+  });
+
+  it('checks the rows against the daily balances printed in the statement', () => {
+    expect(parseItau(ITAU).checks).toEqual({ total: 3, failed: 0 });
+    // Lose one row and the balances no longer add up.
+    const broken = ITAU.filter((l) => !l.items.some((i) => i.text === 'MARIA DA SILVA'));
+    expect(parseItau(broken).checks).toEqual({ total: 3, failed: 1 });
+  });
+
+  it('accepts overdrawn days, whose balance is printed without a minus sign', () => {
+    const overdrawn: PdfLine[] = [
+      one('Extrato conta corrente'),
+      one('Lançamentos'),
+      header,
+      closing('15/10/2026', '1.000,00'),
+      row('15/10/2026', 'SALÁRIO', 'EMPRESA EXEMPLO', '1.070,00'),
+      closing('13/10/2026', '70,00'), // really −70,00
+      row('13/10/2026', 'SAÍDA', 'SEGURO', '-20,00'),
+      closing('09/10/2026', '50,00'), // really −50,00
+      row('09/10/2026', 'PIX ENVIADO', 'MARIA DA SILVA', '-150,00'),
+      closing('05/10/2026', '100,00'),
+    ];
+    expect(parseItau(overdrawn).checks).toEqual({ total: 3, failed: 0 });
+  });
+
+  it('copes with the date and the kind arriving as one piece of text', () => {
+    const merged = ITAU.map((l) => {
+      const [date, kind, ...rest] = l.items;
+      if (!kind || !/^\d{2}\/\d{2}\/\d{4}$/.test(date.text) || kind.x > 200) return l;
+      return { items: [{ x: date.x, w: date.w + 12 + kind.w, text: `${date.text} ${kind.text}` }, ...rest] };
+    });
+    const s = parseItau(merged);
+    expect(s.entries.length).toBe(8);
+    expect(s.entries[0]).toMatchObject({ date: '2026-11-19', amount: 500000, hint: 'SALÁRIO' });
+    expect(s.checks).toEqual({ total: 3, failed: 0 });
+  });
+
+  it('guesses categories from the kind of movement as well as the description', () => {
+    const rows = planImport(start(), parseItau(ITAU));
+    expect(rows.map((r) => r.category)).toEqual(['salary', 'other', 'eating', 'card', 'interest', 'other', 'other', 'bills']);
+    expect(rows.map((r) => r.kind)).toEqual(['income', 'expense', 'expense', 'expense', 'income', 'expense', 'expense', 'expense']);
+  });
+
+  it('keeps two identical movements on the same day apart, and imports only once', () => {
+    let d = start();
+    const rows = planImport(d, parseItau(ITAU));
+    expect(new Set(rows.map((r) => r.id)).size).toBe(8);
+    d = money.importRows(d, rows, TODAY, 50);
+    expect(planImport(d, parseItau(ITAU)).every((r) => r.status === 'imported')).toBe(true);
+  });
+
+  it('spots movements already imported from a different kind of file', () => {
+    const ofx = '<OFX><STMTTRN><DTPOSTED>20261118<TRNAMT>-50.00<FITID>X1<MEMO>PIX MARIA</STMTTRN></OFX>';
+    const d = money.importRows(start(), planImport(start(), parseOfx(ofx)), TODAY, 50);
+    const rows = planImport(d, parseItau(ITAU));
+    expect(rows.find((r) => r.note === 'MARIA DA SILVA')?.status).toBe('logged');
+    expect(rows.filter((r) => r.status === 'new').length).toBe(7);
+  });
+
+  it('rejects PDFs in another layout', () => {
+    expect(isItauStatement([one('Some other document')])).toBe(false);
+    expect(() => parseItau([one('Some other document')])).toThrow();
+  });
+
+  it('rebuilds lines from scattered text, tolerating slightly different baselines', () => {
+    const lines = groupLines([
+      { page: 2, x: 39.7, y: 700, w: 48, text: 'page two' },
+      { page: 1, x: 434.7, y: 73.2, w: 32, text: '-50,00' },
+      { page: 1, x: 39.7, y: 73.9, w: 48, text: '18/11/2026' },
+      { page: 1, x: 99.9, y: 72.4, w: 66, text: 'PIX ENVIADO' },
+      { page: 1, x: 256.2, y: 122.7, w: 101, text: 'line above' },
+    ]);
+    expect(lines.map((l) => l.items.map((i) => i.text))).toEqual([['line above'], ['18/11/2026', 'PIX ENVIADO', '-50,00'], ['page two']]);
   });
 });
 

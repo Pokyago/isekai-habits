@@ -8,7 +8,9 @@ import { formatLong, formatShort } from '../../game/dates';
 import { activeTransactions, balance, countsInBalance, monthSummary } from '../../money/calc';
 import { categoryName } from '../../money/categories';
 import { addMonths, formatMonth, monthOf } from '../../money/format';
-import { decodeBankFile, parseOfx, planImport, type ImportRow, type OfxStatement } from '../../money/ofx';
+import { isItauStatement, parseItau } from '../../money/itau';
+import { decodeBankFile, parseOfx } from '../../money/ofx';
+import { planImport, type ImportRow, type Statement } from '../../money/statement';
 import { Stats, useMoney } from './forms';
 
 export function TxRow({ tx, onEdit }: { tx: Transaction; onEdit(tx: Transaction): void }) {
@@ -38,13 +40,26 @@ export function TxRow({ tx, onEdit }: { tx: Transaction; onEdit(tx: Transaction)
   );
 }
 
+const isPdf = (bytes: Uint8Array) => bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // "%PDF"
+
+/** PDF statements are read by layout, so each bank's needs its own reader. The PDF library loads only when needed. */
+async function readPdfStatement(bytes: Uint8Array): Promise<Statement> {
+  const { readPdfLines } = await import('../../money/pdfText');
+  const lines = await readPdfLines(bytes);
+  if (!isItauStatement(lines)) {
+    throw new Error('This PDF isn’t a statement layout the app can read yet. Itaú account statements and OFX files work.');
+  }
+  return parseItau(lines);
+}
+
 export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
   const { data, today, fmt } = useMoney();
   const toast = useFx((s) => s.toast);
   const thisMonth = monthOf(today);
   const [month, setMonth] = useState(thisMonth);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<{ rows: ImportRow[]; statement: OfxStatement } | null>(null);
+  const [pending, setPending] = useState<{ rows: ImportRow[]; statement: Statement } | null>(null);
+  const [reading, setReading] = useState(false);
 
   const summary = useMemo(() => monthSummary(data, month), [data, month]);
   const days = useMemo(() => {
@@ -62,11 +77,15 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
+    setReading(true);
     try {
-      const statement = parseOfx(decodeBankFile(new Uint8Array(await file.arrayBuffer())));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const statement = isPdf(bytes) ? await readPdfStatement(bytes) : parseOfx(decodeBankFile(bytes));
       setPending({ rows: planImport(data, statement), statement });
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'warn');
+    } finally {
+      setReading(false);
     }
   };
 
@@ -94,8 +113,8 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
       <Panel
         title="Entries"
         right={
-          <Button variant="ghost" className="-mr-2 min-h-8" onClick={() => fileInput.current?.click()}>
-            <FileUp size={16} /> Import bank file
+          <Button variant="ghost" className="-mr-2 min-h-8" onClick={() => fileInput.current?.click()} disabled={reading}>
+            <FileUp size={16} /> {reading ? 'Reading…' : 'Import bank file'}
           </Button>
         }
       >
@@ -116,7 +135,7 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
         <input
           ref={fileInput}
           type="file"
-          accept=".ofx,.qfx,.txt,application/x-ofx"
+          accept=".pdf,.ofx,.qfx,.txt,application/pdf,application/x-ofx"
           className="hidden"
           onChange={(e) => {
             void onFile(e.target.files?.[0]);
@@ -125,8 +144,8 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
         />
       </Panel>
       <p className="px-1 text-xs text-mute">
-        “Import bank file” reads an OFX statement, the export most banks offer under “Money” or “OFX”. “Spent” leaves
-        out debt payments and savings.
+        “Import bank file” reads an Itaú account statement saved as PDF, or an OFX file from any bank. The file is read
+        on this device and never uploaded. “Spent” leaves out debt payments and savings.
       </p>
 
       {pending && <ImportDialog rows={pending.rows} statement={pending.statement} onClose={() => setPending(null)} />}
@@ -134,7 +153,7 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
   );
 }
 
-function ImportDialog({ rows, statement, onClose }: { rows: ImportRow[]; statement: OfxStatement; onClose(): void }) {
+function ImportDialog({ rows, statement, onClose }: { rows: ImportRow[]; statement: Statement; onClose(): void }) {
   const { data, fmt } = useMoney();
   const importRows = useGame((s) => s.importRows);
   const correctBalance = useGame((s) => s.correctBalance);
@@ -163,7 +182,7 @@ function ImportDialog({ rows, statement, onClose }: { rows: ImportRow[]; stateme
     <Modal title="Import bank file" onClose={onClose}>
       <div className="space-y-3 text-sm">
         <p>
-          The file has <strong>{rows.length}</strong> {rows.length === 1 ? 'movement' : 'movements'}
+          This {statement.format} statement has <strong>{rows.length}</strong> {rows.length === 1 ? 'movement' : 'movements'}
           {dates.length > 0 && (
             <>
               , from {formatShort(dates[0])} to {formatShort(dates[dates.length - 1])}
@@ -182,16 +201,26 @@ function ImportDialog({ rows, statement, onClose }: { rows: ImportRow[]; stateme
           )}
           {logged.length > 0 && (
             <li>
-              <strong className="text-ink">{logged.length}</strong> look like entries you typed in yourself (same amount,
-              within 3 days)
+              <strong className="text-ink">{logged.length}</strong> look like entries you already have (same amount,
+              same day or within 3 days of one you typed in)
             </li>
           )}
         </ul>
 
+        {statement.checks && statement.checks.total > 0 && (
+          <p className={`rounded-lg border px-3 py-2 text-xs ${statement.checks.failed > 0 ? 'border-danger/60 bg-danger/10 text-ink' : 'border-edge/70 text-mute'}`}>
+            {statement.checks.failed > 0
+              ? `Careful: in ${statement.checks.failed} of ${statement.checks.total} places the daily balance printed in the statement doesn’t match the rows read, so some rows may have been misread. Check the entries after importing.`
+              : statement.checks.total === 1
+                ? 'Checked: the daily balance printed in the statement matches the rows read.'
+                : `Checked: all ${statement.checks.total} daily balances printed in the statement match the rows read.`}
+          </p>
+        )}
+
         {logged.length > 0 && (
           <label className="flex items-start gap-2">
             <input type="checkbox" className="mt-0.5 size-4" checked={skipLogged} onChange={(e) => setSkipLogged(e.target.checked)} />
-            <span>Skip the {logged.length} that look already typed in</span>
+            <span>Skip the {logged.length} that look like ones you already have</span>
           </label>
         )}
         {bank && (
