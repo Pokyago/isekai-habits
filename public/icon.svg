@@ -1,20 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    The app icon: a sword laid as a tick. The blade is the long stroke of the tick and
+    one arm of the guard is the short one: a habit done, in another world. Behind it,
+    the summoning circle. scripts/gen-icons.mjs turns this into every size needed; it
+    rounds the corners of the plate and uses the groups named detail, spark and sword.
+  -->
   <defs>
-    <radialGradient id="bg" cx="50%" cy="30%" r="80%">
-      <stop offset="0" stop-color="#27307a"/>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#2a3486"/>
+      <stop offset="0.55" stop-color="#141a45"/>
       <stop offset="1" stop-color="#090b17"/>
     </radialGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffe08a"/>
-      <stop offset="1" stop-color="#e0a52e"/>
+      <stop offset="0" stop-color="#fff0b0"/>
+      <stop offset="1" stop-color="#e6a82c"/>
     </linearGradient>
+    <linearGradient id="goldDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3c452"/>
+      <stop offset="1" stop-color="#c98a17"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#6fd6ff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#6fd6ff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <!-- summoning circle -->
-  <circle cx="256" cy="256" r="168" fill="none" stroke="#6fd6ff" stroke-width="8" opacity="0.9"/>
-  <circle cx="256" cy="256" r="140" fill="none" stroke="#6fd6ff" stroke-width="3" stroke-dasharray="6 14" opacity="0.7"/>
-  <!-- rank diamond -->
-  <rect x="176" y="176" width="160" height="160" rx="18" transform="rotate(45 256 256)" fill="#12162c" stroke="url(#gold)" stroke-width="12"/>
-  <!-- upward arrow: level up -->
-  <path d="M256 190 L316 262 H280 V322 H232 V262 H196 Z" fill="url(#gold)"/>
+  <rect id="plate" width="512" height="512" rx="0" fill="url(#bg)"/>
+
+  <g id="detail">
+    <circle cx="256" cy="262" r="220" fill="url(#glow)"/>
+    <circle cx="256" cy="262" r="186" fill="none" stroke="#6fd6ff" stroke-width="7" opacity="0.85"/>
+    <circle cx="256" cy="262" r="160" fill="none" stroke="#6fd6ff" stroke-width="3" stroke-dasharray="5 15" opacity="0.6"/>
+  </g>
+
+  <g id="sword">
+    <!-- a soft shadow, so the sword stands clear of the circle -->
+    <g transform="translate(232 350) rotate(40)" fill="#05060f" opacity="0.4">
+      <path d="M-24 0 V-212 L0 -262 L24 -212 V0 Z"/>
+      <path d="M-152 -16 A16 16 0 0 0 -152 16 L34 24 A24 24 0 0 0 34 -24 Z"/>
+      <rect x="-14" y="14" width="28" height="62" rx="6"/>
+      <circle cx="0" cy="90" r="20"/>
+    </g>
+    <g transform="translate(226 338) rotate(40)">
+      <!-- grip and pommel -->
+      <rect x="-14" y="14" width="28" height="62" rx="6" fill="#6fd6ff"/>
+      <path d="M-14 31h28M-14 45h28M-14 59h28" stroke="#12162c" stroke-width="5" opacity="0.55"/>
+      <circle cx="0" cy="90" r="20" fill="url(#goldDark)"/>
+      <!-- blade: lit on one side -->
+      <path d="M-24 0 V-212 L0 -262 L24 -212 V0 Z" fill="url(#gold)"/>
+      <path d="M0 0 V-262 L24 -212 V0 Z" fill="url(#goldDark)"/>
+      <!-- guard: a long arm on one side, a stub on the other -->
+      <path d="M-152 -16 A16 16 0 0 0 -152 16 L34 24 A24 24 0 0 0 34 -24 Z" fill="url(#gold)"/>
+      <circle cx="0" cy="0" r="9" fill="#6fd6ff"/>
+    </g>
+  </g>
+
+  <g id="spark" fill="#fff6cf">
+    <path d="M404 96 l9 24 24 9 -24 9 -9 24 -9 -24 -24 -9 24 -9 z"/>
+    <path d="M118 150 l5 14 14 5 -14 5 -5 14 -5 -14 -14 -5 14 -5 z" opacity="0.8"/>
+  </g>
 </svg>

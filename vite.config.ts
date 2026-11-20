@@ -23,7 +23,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // Registered by hand in src/main.tsx, so the desktop window can skip it.
       injectRegister: false,
-      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['icon.svg', 'favicon.svg', 'apple-touch-icon.png'],
       // The PDF reader's worker is about 1.3 MB; keep it available offline too.
       workbox: {
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
