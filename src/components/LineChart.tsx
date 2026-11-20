@@ -49,6 +49,7 @@ export function LineChart({
   formatValue = format,
   axisWidth = 44,
   height: HEIGHT = 220,
+  reference,
   label,
 }: {
   series: ChartSeries[];
@@ -61,6 +62,8 @@ export function LineChart({
   /** Room for the axis labels on the left. */
   axisWidth?: number;
   height?: number;
+  /** A level to compare against, drawn as a dashed line across the chart (a goal weight, say). */
+  reference?: { value: number; label: string };
   /** Describes the chart for screen readers. */
   label: string;
 }) {
@@ -89,6 +92,8 @@ export function LineChart({
   );
   const values = series.flatMap((s) => s.points.map((p) => p.value));
   if (dates.length === 0) return null;
+  // The scale stretches to take in the reference level, so the gap to it can be seen.
+  if (reference) values.push(reference.value);
 
   const ticks = ticksFor(Math.min(...values), Math.max(...values), decimals);
   const yMin = ticks[0];
@@ -124,7 +129,7 @@ export function LineChart({
 
   return (
     <div>
-      {series.length > 1 && (
+      {(series.length > 1 || reference) && (
         <ul className="mb-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-mute">
           {series.map((s) => (
             <li key={s.name} className="inline-flex items-center gap-1.5">
@@ -132,6 +137,12 @@ export function LineChart({
               {s.name}
             </li>
           ))}
+          {reference && (
+            <li className="inline-flex items-center gap-1.5">
+              <span className="w-4 border-t-2 border-dashed border-mute" />
+              {reference.label}
+            </li>
+          )}
         </ul>
       )}
       <div
@@ -172,6 +183,18 @@ export function LineChart({
             <text x={width - MARGIN.right} y={HEIGHT - 6} textAnchor="end" fontSize={11} fill="var(--color-mute)">
               {formatShort(dates[dates.length - 1])}
             </text>
+          )}
+
+          {reference && (
+            <line
+              x1={left}
+              x2={width - MARGIN.right}
+              y1={y(reference.value)}
+              y2={y(reference.value)}
+              stroke="var(--color-mute)"
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+            />
           )}
 
           {activeDate && (

@@ -2,6 +2,7 @@ import { STAT_ORDER } from '../data/meta';
 import type { DateStr, SaveData, StatKey } from '../data/types';
 import { achievements, type Achievement } from './achievements';
 import { HERO_XP_BASE, STAT_XP_BASE, levelFromXp, rankForLevel, type LevelInfo, type Rank } from './levels';
+import { PLAN_STAT } from '../plan/plan';
 import { walkStreaks, type HabitStreak } from './streaks';
 
 export interface Derived {
@@ -17,6 +18,8 @@ export interface Derived {
   perfectDays: number;
   completions: number;
   questsDone: number;
+  /** Days whose main goal was achieved. */
+  mainGoalsDone: number;
   achievements: Achievement[];
 }
 
@@ -41,6 +44,15 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     heroXp += q.xp;
     statXp[q.stat] += q.xp;
     goldEarned += q.gold;
+  }
+  // Planned goals train Focus. One that was ticked and later removed keeps what it earned.
+  let mainGoalsDone = 0;
+  for (const p of Object.values(data.plan)) {
+    if (!p.done) continue;
+    if (p.main) mainGoalsDone++;
+    heroXp += p.xp;
+    statXp[PLAN_STAT] += p.xp;
+    goldEarned += p.gold;
   }
   const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0, health: 0 };
   for (const c of Object.values(data.claims)) {
@@ -85,6 +97,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     perfectDays: walk.perfectDays,
     completions,
     questsDone,
+    mainGoalsDone,
     achievements: achievements({
       completions,
       bestDayStreak,
@@ -99,6 +112,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
       goalsReached: moneyClaims.goal,
       debtsCleared: moneyClaims.debt,
       healthWeeks: moneyClaims.health,
+      mainGoalsDone,
     }),
   };
 }

@@ -1,6 +1,7 @@
-import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { HabitCard } from '../components/HabitCard';
+import { PlanTick } from '../components/PlanBits';
 import { SleepQuick } from '../components/SleepQuick';
 import { Bar, Button, Chip, Empty, IconButton, Panel, Ring, StatIcon, inputBase } from '../components/ui';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, statColor } from '../data/meta';
@@ -13,6 +14,7 @@ import { dailyQuests, type DailyQuest } from '../game/dailyQuests';
 import { addDays, daysBetween, formatLong } from '../game/dates';
 import { dueHabits, isDone } from '../game/schedule';
 import { BASE_XP } from '../game/xp';
+import { PLAN_AHEAD_REWARD, hasPlan, planFor } from '../plan/plan';
 
 const DAYS_BACK = 7;
 const HIDE_DONE_KEY = 'isekai-habits-hide-done';
@@ -163,7 +165,77 @@ function DailyQuests({ quests }: { quests: DailyQuest[] }) {
   );
 }
 
-export function Today({ onManageHabits }: { onManageHabits(): void }) {
+/** What was planned for the day, ready to be ticked off, and the way to plan the next one. */
+function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolean; onPlan(offset: number): void }) {
+  const data = useGame((s) => s.data);
+  const { main, items, day } = useMemo(() => planFor(data, date), [data, date]);
+  const all = main ? [main, ...items] : items;
+  const tomorrow = addDays(date, 1);
+  const tomorrowPlanned = isToday && hasPlan(data, tomorrow);
+  const planBonus = isToday && !data.claims[`plan|${tomorrow}`];
+  if (!isToday && all.length === 0 && !day?.note) return null;
+
+  return (
+    <Panel
+      title={isToday ? 'Today’s plan' : 'Plan for the day'}
+      right={
+        all.length > 0 ? (
+          <span className="text-xs text-mute tabular-nums">
+            {all.filter((p) => p.done).length}/{all.length}
+          </span>
+        ) : undefined
+      }
+    >
+      {main && (
+        <div
+          key={String(main.done)}
+          className={`mb-2 flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+            main.done ? 'animate-goal border-gold/70 bg-gold/10' : 'border-gold/40 bg-gold/5'
+          }`}
+        >
+          <PlanTick item={main} size={40} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold tracking-wide text-gold uppercase">Main goal</p>
+            <p className={`font-display text-base leading-snug font-bold break-words ${main.done ? 'text-gold' : ''}`}>{main.title}</p>
+          </div>
+        </div>
+      )}
+      {items.length > 0 && (
+        <ul className="space-y-1.5">
+          {items.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 rounded-lg px-1 py-0.5">
+              <PlanTick item={p} size={30} />
+              {p.time && <span className="shrink-0 text-xs font-semibold text-glow tabular-nums">{p.time}</span>}
+              <span className={`min-w-0 flex-1 text-sm break-words ${p.done ? 'text-mute line-through' : ''}`}>{p.title}</span>
+              {p.done && p.xp > 0 && <span className="shrink-0 text-xs font-semibold text-gold">+{p.xp} XP</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {all.length === 0 && <p className="text-sm text-mute">Nothing was planned for {isToday ? 'today' : 'this day'}.</p>}
+      {day?.note && <p className="mt-3 border-l-2 border-edge pl-3 text-sm whitespace-pre-line text-mute">{day.note}</p>}
+      {(day?.wake || day?.bed) && (
+        <p className="mt-2 text-xs text-mute tabular-nums">
+          {[day.wake && `Up at ${day.wake}`, day.bed && `in bed by ${day.bed}`].filter(Boolean).join(' · ')}
+        </p>
+      )}
+
+      {isToday && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant={tomorrowPlanned ? 'default' : 'gold'} className="flex-1 whitespace-nowrap" onClick={() => onPlan(1)}>
+            <CalendarClock size={16} />
+            {tomorrowPlanned ? 'Tomorrow’s plan' : `Plan tomorrow${planBonus ? ` · +${PLAN_AHEAD_REWARD.xp} XP` : ''}`}
+          </Button>
+          <Button variant="ghost" className="whitespace-nowrap" onClick={() => onPlan(0)}>
+            <Plus size={16} /> Add to today
+          </Button>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPlan(offset: number): void }) {
   const data = useGame((s) => s.data);
   const today = useToday();
   const [offset, setOffset] = useState(0);
@@ -219,6 +291,7 @@ export function Today({ onManageHabits }: { onManageHabits(): void }) {
       <div className="space-y-4 xl:grid xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start xl:gap-6 xl:space-y-0">
         <aside className="space-y-4 xl:sticky xl:top-20 xl:order-2 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto xl:pr-1">
           <DayCard date={date} isToday={offset === 0} />
+          <DayPlanCard date={date} isToday={offset === 0} onPlan={onPlan} />
           <DailyQuests quests={quests} />
           {offset === 0 && <SleepQuick />}
           <div className="hidden xl:block">

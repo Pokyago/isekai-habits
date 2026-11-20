@@ -41,6 +41,8 @@ function useNumber() {
 
 /** What gets its own chart: each single measurement, plus blood pressure as a pair. Sleep is charted from the nightly log. */
 type ChartKey = Exclude<MetricKey, 'systolic' | 'diastolic' | 'sleepHours'> | 'pressure';
+/** Charts that keep their place on the page even before they have anything to draw. */
+const ALWAYS: ChartKey[] = ['weight', 'restingBpm', 'pressure'];
 const CHARTS: { key: ChartKey; label: string }[] = [
   { key: 'weight', label: 'Weight' },
   { key: 'restingBpm', label: 'Resting heart rate' },
@@ -89,7 +91,16 @@ export function Health() {
     const days = RANGES.find((r) => r.value === range)!.days;
     const from = days === null ? '' : addDays(today, -days);
     const inRange = entries.filter((e) => e.date >= from);
-    const list: { key: string; label: string; unit: string; decimals: number; series: ChartSeries[]; sleep?: boolean }[] = [];
+    const list: {
+      key: string;
+      label: string;
+      unit: string;
+      decimals: number;
+      series: ChartSeries[];
+      sleep?: boolean;
+      /** Shown in place of the drawing while there is nothing to draw. */
+      empty?: string;
+    }[] = [];
 
     for (const c of CHARTS) {
       const metric = c.key === 'pressure' ? METRICS.systolic : METRICS[c.key];
@@ -102,6 +113,16 @@ export function Health() {
           : [{ name: c.label, color: CHART_COLORS[0], points: readings(inRange, c.key) }];
       if (series.some((s) => s.points.length > 0)) {
         list.push({ key: c.key, label: c.label, unit: metric.unit, decimals: metric.decimals, series });
+      } else if (ALWAYS.includes(c.key) && readings(entries, metric.key).length === 0) {
+        // Never measured: show the empty frame, so it is clear what a check-in will draw.
+        list.push({
+          key: c.key,
+          label: c.label,
+          unit: metric.unit,
+          decimals: metric.decimals,
+          series: [],
+          empty: `No ${c.label.toLowerCase()} recorded yet. Add it in a check-in and the line starts here.`,
+        });
       }
     }
 
@@ -126,11 +147,21 @@ export function Health() {
           series: [{ name: 'Sleep', color: CHART_COLORS[0], points: weekly }],
           sleep: true,
         });
+      } else if (nights.length === 0 && readings(entries, 'sleepHours').length === 0) {
+        list.push({
+          key: 'sleep',
+          label: 'Sleep',
+          unit: 'hours',
+          decimals: 1,
+          series: [],
+          sleep: true,
+          empty: 'No nights logged yet. Log last night above and the line starts here.',
+        });
       }
     }
     return list;
   }, [entries, nights, range, today]);
-  const anyData = entries.length > 0 || nights.length > 0;
+  const goalWeight = profile?.goalWeight ?? null;
 
   const delta = (last: number, previous: number | undefined, decimals: number, since: string | undefined) => {
     if (previous === undefined || !since) return 'first reading';
@@ -218,8 +249,7 @@ export function Health() {
         </Panel>
       )}
 
-      {anyData && (
-        <section className="space-y-3">
+      <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-xl font-bold">Trends</h2>
             <div className="min-w-72 max-w-xl flex-1">
@@ -234,21 +264,29 @@ export function Health() {
             <div className="grid items-start gap-4 md:grid-cols-2 3xl:grid-cols-3">
               {charts.map((c) => (
                 <Panel key={c.key} title={c.label} right={<span className="text-xs text-mute">{c.unit}</span>}>
-                  <LineChart
-                    series={c.series}
-                    unit={c.sleep ? '' : c.unit}
-                    decimals={c.decimals}
-                    format={(v) => num(v, Number.isInteger(v) ? 0 : c.decimals)}
-                    formatValue={c.sleep ? formatSleep : (v) => num(v, c.decimals)}
-                    height={210}
-                    label={`${c.label} over time`}
-                  />
+                  {c.empty ? (
+                    <EmptyChart height={210}>{c.empty}</EmptyChart>
+                  ) : (
+                    <LineChart
+                      series={c.series}
+                      unit={c.sleep ? '' : c.unit}
+                      decimals={c.decimals}
+                      format={(v) => num(v, Number.isInteger(v) ? 0 : c.decimals)}
+                      formatValue={c.sleep ? formatSleep : (v) => num(v, c.decimals)}
+                      height={210}
+                      reference={
+                        c.key === 'weight' && goalWeight !== null
+                          ? { value: goalWeight, label: `Goal ${num(goalWeight, 1)} kg` }
+                          : undefined
+                      }
+                      label={`${c.label} over time`}
+                    />
+                  )}
                 </Panel>
               ))}
             </div>
           )}
-        </section>
-      )}
+      </section>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         {entries.length > 0 && (
@@ -286,6 +324,20 @@ export function Health() {
       </div>
 
       {form && <CheckInForm entry={form.entry} onClose={() => setForm(null)} />}
+    </div>
+  );
+}
+
+/** The frame of a chart with nothing drawn in it yet, and a line saying what will fill it. */
+function EmptyChart({ height, children }: { height: number; children: ReactNode }) {
+  return (
+    <div className="relative overflow-hidden rounded-lg" style={{ height }}>
+      <div className="absolute inset-x-0 top-3 bottom-7 flex flex-col justify-between" aria-hidden>
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} className="border-t border-edge/55" />
+        ))}
+      </div>
+      <p className="absolute inset-0 flex items-center justify-center px-8 text-center text-sm text-mute">{children}</p>
     </div>
   );
 }

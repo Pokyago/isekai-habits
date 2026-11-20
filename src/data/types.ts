@@ -93,6 +93,37 @@ export interface Purchase {
   updatedAt: number;
 }
 
+// ---------- planning ----------
+
+/** Something planned for one particular day: the day's main goal, or another goal or appointment. */
+export interface PlanItem {
+  id: string;
+  date: DateStr;
+  title: string;
+  /** The one thing that would make the day a success. A day has at most one; its id is `main|${date}`. */
+  main: boolean;
+  /** When it starts, as HH:MM, or null when it has no set time. */
+  time: string | null;
+  /** Ticked off. XP and gold are fixed at that moment. */
+  done: boolean;
+  xp: number;
+  gold: number;
+  createdAt: number;
+  deleted: boolean;
+  updatedAt: number;
+}
+
+/** The frame of a planned day: when to get up, when to be in bed, and a note to yourself. Its id is its date. */
+export interface DayPlan {
+  id: string;
+  date: DateStr;
+  /** HH:MM, or null when not set. */
+  wake: string | null;
+  bed: string | null;
+  note: string;
+  updatedAt: number;
+}
+
 // ---------- health ----------
 
 /** One health check-in. There is at most one per day; its id is its date. Anything not measured is null. */
@@ -237,12 +268,12 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 5;
+  version: 6;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
   quests: Record<string, Quest>;
-  /** Rewards already given: daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) weekly health check-ins (`health|monday`) and nightly sleep logs (`sleep|date`). */
+  /** Rewards already given: daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) weekly health check-ins (`health|monday`), nightly sleep logs (`sleep|date`) and planning a day ahead (`plan|date`). */
   claims: Record<string, QuestClaim>;
   rewards: Record<string, Reward>;
   purchases: Record<string, Purchase>;
@@ -255,4 +286,8 @@ export interface SaveData {
   health: Record<string, HealthEntry>;
   sleep: Record<string, SleepLog>;
   healthProfile: HealthProfile | null;
+  /** Goals and appointments planned for particular days. */
+  plan: Record<string, PlanItem>;
+  /** Wake-up time, bedtime and a note for a day, keyed by date. */
+  days: Record<string, DayPlan>;
 }

@@ -21,6 +21,8 @@ export interface AchievementInput {
   debtsCleared: number;
   /** Weeks with a health check-in. */
   healthWeeks: number;
+  /** Days whose main goal was achieved. */
+  mainGoalsDone: number;
 }
 
 export function achievements(a: AchievementInput): Achievement[] {
@@ -49,6 +51,9 @@ export function achievements(a: AchievementInput): Achievement[] {
     ['debt-slayer', 'Debt Slayer', 'Clear a debt completely', a.debtsCleared >= 1],
     ['checkup-4', 'Know Thyself', 'Do a health check-in in 4 different weeks', a.healthWeeks >= 4],
     ['checkup-26', 'Half a Year of Vitals', 'Do a health check-in in 26 different weeks', a.healthWeeks >= 26],
+    ['plan-1', 'Tactician', 'Achieve a day’s main goal', a.mainGoalsDone >= 1],
+    ['plan-7', 'Strategist', 'Achieve your main goal on 7 days', a.mainGoalsDone >= 7],
+    ['plan-30', 'Grand Strategist', 'Achieve your main goal on 30 days', a.mainGoalsDone >= 30],
   ];
   return list.map(([id, title, description, earned]) => ({ id, title, description, earned }));
 }

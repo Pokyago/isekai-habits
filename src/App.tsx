@@ -1,4 +1,6 @@
 import {
+  CalendarClock,
+  Check,
   Coins,
   HeartPulse,
   RefreshCw,
@@ -7,6 +9,7 @@ import {
   Shield,
   Store,
   Swords,
+  Target,
   User,
   Wallet,
   type LucideIcon,
@@ -17,6 +20,7 @@ import { useManualDirty } from './components/SyncPanel';
 import { Bar, Button, Ring, Segmented } from './components/ui';
 import { useGame } from './data/store';
 import { nextRankLevel } from './game/levels';
+import { mainId } from './plan/plan';
 import { useChanged, useCountUp, useDayProgress, useDerived, useToday } from './hooks';
 import { Chronicle } from './screens/Chronicle';
 import { Habits } from './screens/Habits';
@@ -24,15 +28,17 @@ import { Health } from './screens/Health';
 import { Hero } from './screens/Hero';
 import { Money } from './screens/money/Money';
 import { Onboarding } from './screens/Onboarding';
+import { Plan } from './screens/Plan';
 import { Settings } from './screens/Settings';
 import { Shop } from './screens/Shop';
 import { Today } from './screens/Today';
 import { initSync, reconnectSaveFile, syncMode, useSync } from './sync';
 
-type Tab = 'today' | 'habits' | 'health' | 'money' | 'shop' | 'hero' | 'settings';
+type Tab = 'today' | 'plan' | 'habits' | 'health' | 'money' | 'shop' | 'hero' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'today', label: 'Today', icon: Swords },
+  { id: 'plan', label: 'Plan', icon: CalendarClock },
   { id: 'habits', label: 'Habits', icon: ScrollText },
   { id: 'health', label: 'Health', icon: HeartPulse },
   { id: 'money', label: 'Money', icon: Wallet },
@@ -43,6 +49,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
 /** How wide each section's content may grow on a large window. */
 const WIDTH: Record<Tab, string> = {
   today: 'max-w-[110rem]',
+  plan: 'max-w-[100rem]',
   habits: 'max-w-[110rem]',
   health: 'max-w-7xl',
   money: 'max-w-7xl',
@@ -55,6 +62,16 @@ export default function App() {
   const loaded = useGame((s) => s.loaded);
   const hasHero = useGame((s) => s.data.hero !== null);
   const [tab, setTab] = useState<Tab>('today');
+  // Which day the Plan page opens on: 1 is tomorrow, 0 is today.
+  const [planStart, setPlanStart] = useState(1);
+  const openPlan = (offset: number) => {
+    setPlanStart(offset);
+    setTab('plan');
+  };
+  const select = (next: Tab) => {
+    if (next === 'plan') setPlanStart(1);
+    setTab(next);
+  };
 
   useEffect(() => {
     void useGame
@@ -89,7 +106,7 @@ export default function App() {
   return (
     // On a large window the sections sit in a rail on the left; on a small one, in a bar at the bottom.
     <div className="min-h-dvh lg:pl-56">
-      <SideNav tab={tab} onSelect={setTab} />
+      <SideNav tab={tab} onSelect={select} />
       <TopBar
         onSettings={() => setTab(tab === 'settings' ? 'today' : 'settings')}
         settingsOpen={tab === 'settings'}
@@ -99,7 +116,8 @@ export default function App() {
       <div className={`mx-auto px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:px-8 lg:pt-6 lg:pb-12 ${WIDTH[tab]}`}>
         {tab !== 'settings' && <SyncNotice onOpenSettings={() => setTab('settings')} />}
         <main key={tab} className="animate-fade">
-          {tab === 'today' && <Today onManageHabits={() => setTab('habits')} />}
+          {tab === 'today' && <Today onManageHabits={() => setTab('habits')} onPlan={openPlan} />}
+          {tab === 'plan' && <Plan startOn={planStart} />}
           {tab === 'hero' && <HeroPage />}
           {tab === 'health' && <Health />}
           {tab === 'habits' && <Habits />}
@@ -120,7 +138,7 @@ export default function App() {
               <li key={id} className="flex-1">
                 <button
                   type="button"
-                  onClick={() => setTab(id)}
+                  onClick={() => select(id)}
                   aria-current={on ? 'page' : undefined}
                   className={`flex w-full flex-col items-center gap-1 pt-2.5 pb-2 text-[10px] font-medium transition-colors sm:text-[11px] ${
                     on ? 'text-glow' : 'text-mute hover:text-ink'
@@ -292,6 +310,9 @@ function TopBar({
   onToday(): void;
 }) {
   const hero = useGame((s) => s.data.hero);
+  const today = useToday();
+  const main = useGame((s) => s.data.plan[mainId(today)]);
+  const goal = main && !main.deleted ? main : null;
   const d = useDerived();
   const day = useDayProgress();
   const gold = useCountUp(d.gold);
@@ -320,6 +341,28 @@ function TopBar({
             {xpGained > 0 && <span key={xpGained} className="animate-shine pointer-events-none absolute inset-0" />}
           </div>
         </div>
+
+        {goal && (
+          <button
+            type="button"
+            onClick={onToday}
+            title={`Today’s main goal${goal.done ? ' (achieved)' : ''}: ${goal.title}`}
+            className="hidden max-w-72 shrink-0 items-center gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-raise xl:flex"
+          >
+            <span
+              key={String(goal.done)}
+              className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${
+                goal.done ? 'animate-goal border-gold bg-gold text-void' : 'border-gold/70 text-gold'
+              }`}
+            >
+              {goal.done ? <Check size={14} strokeWidth={3} /> : <Target size={13} />}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[10px] leading-none font-semibold tracking-wide text-mute uppercase">Main goal</span>
+              <span className={`mt-0.5 block truncate text-sm leading-tight font-medium ${goal.done ? 'text-gold' : ''}`}>{goal.title}</span>
+            </span>
+          </button>
+        )}
 
         <button
           type="button"

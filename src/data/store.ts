@@ -9,6 +9,8 @@ import { useFx } from './fx';
 import { emptySave, parseSave, serializeSave } from './merge';
 import * as health from '../health/health';
 import type { CheckInInput } from '../health/health';
+import * as plan from '../plan/plan';
+import type { PlanInput } from '../plan/plan';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
 import type { ImportRow } from '../money/statement';
@@ -60,6 +62,14 @@ interface GameState {
   saveHealthProfile(profile: { heightCm: number | null; goalWeight: number | null }): void;
   saveSleep(date: DateStr, hours: number): void;
   deleteSleep(date: DateStr): void;
+  // Planning
+  setMainGoal(date: DateStr, title: string): void;
+  addPlanItem(date: DateStr, input: PlanInput): void;
+  updatePlanItem(id: string, input: PlanInput): void;
+  togglePlanItem(id: string): void;
+  deletePlanItem(id: string): void;
+  movePlanItem(id: string, toDate: DateStr): void;
+  saveDay(date: DateStr, patch: { wake?: string | null; bed?: string | null; note?: string }): void;
 
   /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
   tick(): void;
@@ -232,6 +242,27 @@ export const useGame = create<GameState>((set, get) => {
     },
     deleteSleep(date) {
       apply((d) => health.deleteSleep(d, date, Date.now()));
+    },
+    setMainGoal(date, title) {
+      apply((d) => plan.setMainGoal(d, date, title, todayStr(), Date.now()), true);
+    },
+    addPlanItem(date, input) {
+      apply((d) => plan.addPlanItem(d, date, input, Date.now()));
+    },
+    updatePlanItem(id, input) {
+      apply((d) => plan.updatePlanItem(d, id, input, Date.now()));
+    },
+    togglePlanItem(id) {
+      apply((d) => plan.togglePlanItem(d, id, todayStr(), Date.now()), true);
+    },
+    deletePlanItem(id) {
+      apply((d) => plan.deletePlanItem(d, id, Date.now()));
+    },
+    movePlanItem(id, toDate) {
+      apply((d) => plan.movePlanItem(d, id, toDate, Date.now()));
+    },
+    saveDay(date, patch) {
+      apply((d) => plan.saveDay(d, date, patch, Date.now()));
     },
     tick() {
       applyMoney((d) => d);

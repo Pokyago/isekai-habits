@@ -1,3 +1,4 @@
+import { PLAN_AHEAD_REWARD, REWARDED_GOALS } from '../plan/plan';
 import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { SyncPanel } from '../components/SyncPanel';
@@ -87,6 +88,12 @@ export function Settings() {
             Health: the first check-in of each week gives +{HEALTH_REWARD.xp} Vitality XP and +{HEALTH_REWARD.gold}{' '}
             gold, and logging last night’s sleep gives +{SLEEP_REWARD.xp} XP and +{SLEEP_REWARD.gold} gold. Nothing depends on
             what the numbers are.
+          </li>
+          <li>
+            Planning: setting tomorrow’s main goal the day before gives +{PLAN_AHEAD_REWARD.xp} Focus XP. Achieving a
+            day’s main goal is worth as much as a Medium quest, and each of the first {REWARDED_GOALS} other goals you
+            finish that day as much as an Easy one. Nothing is lost for a goal left undone; it can be moved to another
+            day.
           </li>
         </ul>
       </Panel>
