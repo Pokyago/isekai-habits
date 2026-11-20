@@ -11,7 +11,7 @@ import { isItauStatement, parseItau, type PdfLine } from './itau';
 import { decodeBankFile, parseOfx } from './ofx';
 import { groupLines } from './pdfLines';
 import { planImport } from './statement';
-import { nextCharge, subscriptionTotals, upcomingCharges } from './subscriptions';
+import { fixedCosts, nextCharge, subscriptionTotals, upcomingCharges } from './subscriptions';
 import { balanceSeries, categoryByMonth, categoryTotals, firstMonthWithEntries, lastMonths, monthlyFlows } from './trends';
 import { daysBetween as daysBetweenDates } from '../game/dates';
 
@@ -552,6 +552,65 @@ describe('subscriptions', () => {
     expect(subscriptionTotals(money.deleteSubscription(d, id, 50)).count).toBe(0);
   });
 
+  it('keeps monthly bills apart from subscriptions', () => {
+    let d = addSub(start(), { amount: 5590 });
+    d = addSub(d, { name: 'Japanese lessons', amount: 40000, type: 'bill', category: 'education', paidWith: 'manual' }, 6);
+    d = addSub(d, { name: 'Gym', amount: 12000, type: 'bill', paidWith: 'card' }, 7);
+    d = addSub(d, { name: 'Old course', amount: 9900, type: 'bill', active: false }, 8);
+    expect(subscriptionTotals(d)).toMatchObject({ count: 1, perMonth: 5590 });
+    expect(subscriptionTotals(d, 'bill')).toEqual({ count: 2, perMonth: 52000, perYear: 624000, onCard: 12000, fromBank: 40000 });
+    expect(upcomingCharges(d, TODAY, 'bill').map((u) => u.sub.name)).toEqual(['Gym', 'Japanese lessons']);
+    expect(upcomingCharges(d, TODAY, 'subscription').map((u) => u.sub.name)).toEqual(['Streaming']);
+    expect(upcomingCharges(d, TODAY)).toHaveLength(3);
+  });
+
+  it('stays a bill when it is edited', () => {
+    let d = addSub(start(), { name: 'Gym', type: 'bill' });
+    const id = Object.keys(d.subscriptions)[0];
+    d = money.saveSubscription(d, sub({ name: 'Gym, new plan', amount: 9900 }), id, TODAY, 30);
+    expect(d.subscriptions[id]).toMatchObject({ type: 'bill', name: 'Gym, new plan', amount: 9900 });
+  });
+
+  it('files a bill’s entries under its own category, and adds none for one recorded by hand', () => {
+    let d = addSub(start(100000), { name: 'Dog bath', amount: 8000, type: 'bill', category: 'pets', paidWith: 'bank' });
+    d = addSub(d, { name: 'Cleaner', amount: 20000, type: 'bill', paidWith: 'bank' }, 6);
+    d = addSub(d, { name: 'Lessons', amount: 40000, type: 'bill', paidWith: 'manual' }, 7);
+    d = money.housekeep(d, '2026-11-25', 10);
+    expect(Object.values(d.transactions).map((t) => [t.note, t.category]).sort()).toEqual([
+      ['Cleaner', 'bills'],
+      ['Dog bath', 'pets'],
+    ]);
+  });
+
+  it('adds up everything that leaves every month', () => {
+    let d = addSub(start(), { amount: 5590 });
+    d = addSub(d, { name: 'Domain', amount: 12000, cycle: 'yearly', anchor: '2027-03-15' }, 6);
+    d = addSub(d, { name: 'Gym', amount: 12000, type: 'bill' }, 7);
+    const rec = (name: string, over: Partial<money.RecurringInput> = {}): money.RecurringInput => ({
+      name,
+      kind: 'expense',
+      amount: 150000,
+      category: 'housing',
+      day: 5,
+      startMonth: '2026-11',
+      endMonth: null,
+      goalId: null,
+      debtId: null,
+      ...over,
+    });
+    d = money.saveRecurring(d, rec('Rent'), undefined, 8);
+    d = money.saveRecurring(d, rec('Salary', { kind: 'income', amount: 500000 }), undefined, 9);
+    d = money.saveRecurring(d, rec('Finished instalment', { amount: 30000, startMonth: '2026-01', endMonth: '2026-10' }), undefined, 10);
+    d = money.saveRecurring(d, rec('Starts next year', { amount: 30000, startMonth: '2027-01' }), undefined, 11);
+
+    const costs = fixedCosts(d, TODAY);
+    expect(costs.subscriptions.perMonth).toBe(6590);
+    expect(costs.bills.perMonth).toBe(12000);
+    expect(costs.other).toEqual({ count: 1, perMonth: 150000 });
+    expect(costs.perMonth).toBe(168590);
+    expect(costs.perYear).toBe(5590 * 12 + 12000 + 12000 * 12 + 150000 * 12);
+  });
+
   it('creates the same entry on two devices', () => {
     const base = addSub(start(), { paidWith: 'bank' });
     const pc = money.housekeep(base, '2026-11-25', 1000);
@@ -578,7 +637,7 @@ describe('saving and merging', () => {
     expect(parseSave(JSON.stringify({ version: 2, money: null, transactions: {} }))).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 3, subscriptions: {} }))).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 4, health: {} }))).toEqual(emptySave());
-    expect(() => parseSave(JSON.stringify({ version: 7 }))).toThrow(/newer version/);
+    expect(() => parseSave(JSON.stringify({ version: 8 }))).toThrow(/newer version/);
   });
 });
 

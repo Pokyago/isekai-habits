@@ -4,7 +4,12 @@ import { emptySave, mergeSaves, parseSave, sameSave, serializeSave } from '../da
 import type { SaveData } from '../data/types';
 import { derive } from '../game/derive';
 import * as money from '../money/actions';
+import { dueHabits, isDueOn } from '../game/schedule';
+import { walkStreaks } from '../game/streaks';
 import {
+  habitChoices,
+  planQuest,
+  setHabitChoice,
   PLAN_AHEAD_REWARD,
   REWARDED_GOALS,
   addPlanItem,
@@ -299,9 +304,11 @@ describe('saving and merging plans', () => {
     const old = JSON.parse(serializeSave(start()));
     delete old.plan;
     delete old.days;
+    delete old.habitDays;
     old.version = 5;
     const d = parseSave(JSON.stringify(old));
-    expect(d.version).toBe(6);
+    expect(d.version).toBe(7);
+    expect(d.habitDays).toEqual({});
     expect(d.plan).toEqual({});
     expect(d.days).toEqual({});
   });
@@ -321,5 +328,142 @@ describe('saving and merging plans', () => {
     const base = start();
     const merged = mergeSaves(add(base, TOMORROW, 'One', 'a'), add(base, TOMORROW, 'Two', 'b', null, T0 + 1));
     expect(planFor(merged, TOMORROW).items.map((p) => p.title)).toEqual(['One', 'Two']);
+  });
+});
+
+describe('choosing habits for a day', () => {
+  // TODAY is a Friday. One habit for every day, one for Mondays only, one three times a week.
+  const MON = '2026-11-23';
+  const withHabits = (): { d: SaveData; daily: string; monday: string; weekly: string } => {
+    let d = start();
+    const habit = (name: string, schedule: actions.HabitInput['schedule']) =>
+      actions.saveHabit(d, { name, category: 'exercise', stat: 'str', difficulty: 'easy', schedule, target: 1 }, undefined, '2026-11-01', T0);
+    d = habit('Daily', { kind: 'weekdays', days: [0, 1, 2, 3, 4, 5, 6] });
+    d = habit('Mondays', { kind: 'weekdays', days: [1] });
+    d = habit('Weekly', { kind: 'perWeek', times: 3 });
+    const id = (name: string) => Object.values(d.habits).find((h) => h.name === name)!.id;
+    return { d, daily: id('Daily'), monday: id('Mondays'), weekly: id('Weekly') };
+  };
+  const names = (d: SaveData, date: string) => dueHabits(d, date).map((h) => h.name).sort();
+  const complete = (d: SaveData, id: string, date: string) => actions.setHabitCount(d, id, date, 1, T0);
+
+  it('picks a habit as a priority without changing what is due', () => {
+    const { d, daily, weekly } = withHabits();
+    let next = setHabitChoice(d, daily, TOMORROW, 'pick', TODAY, T0);
+    next = setHabitChoice(next, weekly, TOMORROW, 'pick', TODAY, T0);
+    expect([...habitChoices(next, TOMORROW)]).toEqual(expect.arrayContaining([[daily, 'pick'], [weekly, 'pick']]));
+    expect(names(next, TOMORROW)).toEqual(names(d, TOMORROW));
+    expect(hasPlan(next, TOMORROW)).toBe(true);
+
+    next = setHabitChoice(next, daily, TOMORROW, null, TODAY, T0 + 10);
+    expect(habitChoices(next, TOMORROW).has(daily)).toBe(false);
+    expect(setHabitChoice(next, daily, TOMORROW, null, TODAY, T0 + 20)).toBe(next);
+  });
+
+  it('takes a skipped habit off the day', () => {
+    const { d, daily } = withHabits();
+    const next = setHabitChoice(d, daily, TOMORROW, 'skip', TODAY, T0);
+    expect(names(next, TOMORROW)).toEqual(['Weekly']);
+    expect(names(next, TODAY)).toEqual(['Daily', 'Weekly']);
+    expect(isDueOn(next.habits[daily], TOMORROW, next)).toBe(false);
+  });
+
+  it('keeps the streak through a skipped day, and breaks it on a plain miss', () => {
+    const { d, daily } = withHabits();
+    let done = complete(d, daily, '2026-11-18');
+    done = complete(done, daily, '2026-11-19');
+    done = complete(done, daily, TODAY);
+    const after = (x: SaveData) => walkStreaks(complete(x, daily, '2026-11-22'), '2026-11-22').streaks[daily].current;
+
+    // Saturday missed: the streak starts again on Sunday.
+    expect(after(done)).toBe(1);
+    // Saturday skipped while planning: Sunday carries on from Friday.
+    expect(after(setHabitChoice(done, daily, TOMORROW, 'skip', TODAY, T0))).toBe(4);
+  });
+
+  it('counts a skipped habit that was done anyway', () => {
+    const { d, daily } = withHabits();
+    let next = setHabitChoice(d, daily, TODAY, 'skip', TODAY, T0);
+    next = complete(next, daily, TODAY);
+    expect(names(next, TODAY)).toContain('Daily');
+    expect(walkStreaks(next, TODAY).streaks[daily].current).toBe(1);
+  });
+
+  it('adds a habit for just one day', () => {
+    const { d, monday } = withHabits();
+    expect(names(d, TOMORROW)).not.toContain('Mondays');
+    const next = setHabitChoice(d, monday, TOMORROW, 'extra', TODAY, T0);
+    expect(names(next, TOMORROW)).toContain('Mondays');
+    expect(names(next, '2026-11-22')).not.toContain('Mondays');
+  });
+
+  it('adds to the streak for an extra day that was done, and costs nothing if it was not', () => {
+    const { d, monday } = withHabits();
+    let base = complete(d, monday, '2026-11-16');
+    base = setHabitChoice(base, monday, TOMORROW, 'extra', TODAY, T0);
+    const streak = (x: SaveData) => walkStreaks(complete(x, monday, MON), MON).streaks[monday].current;
+    expect(streak(base)).toBe(2);
+    expect(streak(complete(base, monday, TOMORROW))).toBe(3);
+  });
+
+  it('does not count a skipped habit against a flawless day', () => {
+    const { d, daily, monday } = withHabits();
+    let next = setHabitChoice(d, monday, MON, 'skip', TODAY, T0);
+    next = complete(next, daily, MON);
+    expect(walkStreaks(next, '2026-11-24').perfectDays).toBe(1);
+    expect(walkStreaks(complete(d, daily, MON), '2026-11-24').perfectDays).toBe(0);
+  });
+
+  it('cannot change a day that has passed', () => {
+    const { d, daily } = withHabits();
+    expect(setHabitChoice(d, daily, '2026-11-19', 'skip', TODAY, T0)).toBe(d);
+  });
+
+  it('merges choices made on two devices', () => {
+    const { d, daily, weekly } = withHabits();
+    const pc = setHabitChoice(d, daily, TOMORROW, 'skip', TODAY, T0 + 100);
+    const tablet = setHabitChoice(setHabitChoice(d, daily, TOMORROW, 'pick', TODAY, T0 + 200), weekly, TOMORROW, 'pick', TODAY, T0 + 200);
+    const merged = mergeSaves(pc, tablet);
+    expect(sameSave(merged, mergeSaves(tablet, pc))).toBe(true);
+    expect(habitChoices(merged, TOMORROW).get(daily)).toBe('pick');
+    expect(habitChoices(merged, TOMORROW).get(weekly)).toBe('pick');
+  });
+});
+
+describe('planning quests from the quest log', () => {
+  const withQuest = () => {
+    const d = actions.addQuest(start(), 'Book the dentist', 'foc', 'easy', T0);
+    return { d, id: Object.keys(d.quests)[0] };
+  };
+
+  it('puts a quest on a day and takes it off again', () => {
+    const { d, id } = withQuest();
+    let next = planQuest(d, id, TOMORROW, T0 + 10);
+    expect(planFor(next, TOMORROW).quests.map((q) => q.title)).toEqual(['Book the dentist']);
+    expect(planProgress(next, TOMORROW)).toEqual({ total: 1, done: 0 });
+    expect(planQuest(next, id, TOMORROW, T0 + 20)).toBe(next);
+
+    next = planQuest(next, id, '2026-11-22', T0 + 30);
+    expect(planFor(next, TOMORROW).quests).toHaveLength(0);
+    expect(planFor(next, '2026-11-22').quests).toHaveLength(1);
+
+    next = planQuest(next, id, null, T0 + 40);
+    expect(planFor(next, '2026-11-22').quests).toHaveLength(0);
+  });
+
+  it('shows it as done on its day once it is finished there', () => {
+    const { d, id } = withQuest();
+    let next = planQuest(d, id, TODAY, T0 + 10);
+    next = actions.toggleQuest(next, id, TODAY, T0 + 20);
+    expect(planProgress(next, TODAY)).toEqual({ total: 1, done: 1 });
+    // A finished quest can no longer be moved.
+    expect(planQuest(next, id, TOMORROW, T0 + 30)).toBe(next);
+  });
+
+  it('leaves the day if it was finished on another one', () => {
+    const { d, id } = withQuest();
+    let next = planQuest(d, id, TOMORROW, T0 + 10);
+    next = actions.toggleQuest(next, id, TODAY, T0 + 20);
+    expect(planFor(next, TOMORROW).quests).toHaveLength(0);
   });
 });

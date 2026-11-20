@@ -95,6 +95,11 @@ export function Settings() {
             finish that day as much as an Easy one. Nothing is lost for a goal left undone; it can be moved to another
             day.
           </li>
+          <li>
+            On the Plan page, a habit skipped for a day is passed over: that day neither adds to its streak nor breaks
+            it, and it doesn’t count against a flawless day. A habit added for one day only adds to its streak if you
+            do it and costs nothing if you don’t. Picking a habit as a priority only changes where it is listed.
+          </li>
         </ul>
       </Panel>
 

@@ -17,7 +17,7 @@ function dayActivity(data: SaveData, date: DateStr): { due: number; done: number
     if (h.deleted) continue;
     const completed = isDone(data, h.id, date);
     if (h.schedule.kind === 'weekdays') {
-      if (!isDueOn(h, date)) continue;
+      if (!isDueOn(h, date, data)) continue;
       due++;
       if (completed) done++;
     } else if (completed) {

@@ -2,6 +2,7 @@ import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { create } from 'zustand';
 import { todayStr } from '../game/dates';
 import { derive } from '../game/derive';
+import type { DayChoice } from '../game/schedule';
 import { STATS, STAT_ORDER } from './meta';
 import * as actions from './actions';
 import type { HabitInput } from './actions';
@@ -70,6 +71,8 @@ interface GameState {
   deletePlanItem(id: string): void;
   movePlanItem(id: string, toDate: DateStr): void;
   saveDay(date: DateStr, patch: { wake?: string | null; bed?: string | null; note?: string }): void;
+  setHabitChoice(habitId: string, date: DateStr, choice: DayChoice | null): void;
+  planQuest(questId: string, date: DateStr | null): void;
 
   /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
   tick(): void;
@@ -263,6 +266,12 @@ export const useGame = create<GameState>((set, get) => {
     },
     saveDay(date, patch) {
       apply((d) => plan.saveDay(d, date, patch, Date.now()));
+    },
+    setHabitChoice(habitId, date, choice) {
+      apply((d) => plan.setHabitChoice(d, habitId, date, choice, todayStr(), Date.now()));
+    },
+    planQuest(questId, date) {
+      apply((d) => plan.planQuest(d, questId, date, Date.now()));
     },
     tick() {
       applyMoney((d) => d);

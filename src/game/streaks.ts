@@ -32,6 +32,10 @@ interface Running {
  * `asOf` itself never breaks a streak. When a finished day has misses on habits
  * that have a streak, one shield covers all of them if one is held; otherwise
  * those streaks reset.
+ *
+ * A day a habit was skipped on while planning is passed over: it neither adds to
+ * the streak nor breaks it. A habit added for just one day adds to its streak if
+ * done and costs nothing if not.
  */
 export function walkStreaks(data: SaveData, asOf: DateStr): WalkResult {
   const habits = Object.values(data.habits)
@@ -88,13 +92,15 @@ export function walkStreaks(data: SaveData, asOf: DateStr): WalkResult {
         const isDone = done.get(h.id)?.has(day) ?? false;
 
         if (h.schedule.kind === 'weekdays') {
-          if (!h.schedule.days.includes(wd)) continue;
+          const scheduled = h.schedule.days.includes(wd);
+          const choice = data.habitDays[`${h.id}|${day}`]?.state;
+          if (scheduled ? choice === 'skip' && !isDone : choice !== 'extra') continue;
           due++;
           if (isDone) {
             doneToday++;
             r.current++;
             r.best = Math.max(r.best, r.current);
-          } else if (dayOver) {
+          } else if (dayOver && scheduled) {
             missed.push(r);
           }
         } else {

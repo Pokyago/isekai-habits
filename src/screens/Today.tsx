@@ -12,9 +12,9 @@ import type { DateStr, Difficulty, Habit, StatKey } from '../data/types';
 import { useCountUp, useDayProgress, useDerived, useToday } from '../hooks';
 import { dailyQuests, type DailyQuest } from '../game/dailyQuests';
 import { addDays, daysBetween, formatLong } from '../game/dates';
-import { dueHabits, isDone } from '../game/schedule';
+import { dueHabits, isDone, isScheduledOn } from '../game/schedule';
 import { BASE_XP } from '../game/xp';
-import { PLAN_AHEAD_REWARD, hasPlan, planFor } from '../plan/plan';
+import { PLAN_AHEAD_REWARD, habitChoices, hasPlan, planFor } from '../plan/plan';
 
 const DAYS_BACK = 7;
 const HIDE_DONE_KEY = 'isekai-habits-hide-done';
@@ -30,16 +30,19 @@ function HabitGroups({
   habits,
   date,
   hideDone,
+  planned = false,
 }: {
   habits: Habit[];
   date: DateStr;
   hideDone: boolean;
+  /** Shows them as one group: the habits picked for the day on the Plan page. */
+  planned?: boolean;
 }) {
   const data = useGame((s) => s.data);
   const derived = useDerived();
   const groups: { id: string; habits: Habit[] }[] = [];
   for (const h of habits) {
-    const id = categoryOf(h);
+    const id = planned ? 'planned' : categoryOf(h);
     const last = groups[groups.length - 1];
     if (last && last.id === id) last.habits.push(h);
     else groups.push({ id, habits: [h] });
@@ -55,13 +58,13 @@ function HabitGroups({
         return (
           <section key={g.id}>
             <header className="mb-2 flex items-center gap-3 px-1">
-              <h3 className={`text-[11px] font-semibold tracking-wide uppercase ${complete ? 'text-gold' : 'text-mute'}`}>
-                {habitCategory(g.id).name}
+              <h3 className={`text-[11px] font-semibold tracking-wide uppercase ${complete || planned ? 'text-gold' : 'text-mute'}`}>
+                {planned ? 'Planned for the day' : habitCategory(g.id).name}
               </h3>
               <Bar
                 value={done}
                 max={g.habits.length}
-                color={complete ? 'var(--color-gold)' : statColor(habitCategory(g.id).stat)}
+                color={complete || planned ? 'var(--color-gold)' : statColor(habitCategory(g.id).stat)}
                 className="h-1 max-w-32 flex-1"
               />
               <span className={`text-[11px] tabular-nums ${complete ? 'font-semibold text-gold' : 'text-mute'}`}>
@@ -168,20 +171,23 @@ function DailyQuests({ quests }: { quests: DailyQuest[] }) {
 /** What was planned for the day, ready to be ticked off, and the way to plan the next one. */
 function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolean; onPlan(offset: number): void }) {
   const data = useGame((s) => s.data);
-  const { main, items, day } = useMemo(() => planFor(data, date), [data, date]);
+  const toggleQuest = useGame((s) => s.toggleQuest);
+  const { main, items, quests, day } = useMemo(() => planFor(data, date), [data, date]);
   const all = main ? [main, ...items] : items;
+  const total = all.length + quests.length;
+  const doneCount = all.filter((p) => p.done).length + quests.filter((q) => q.doneDate !== null).length;
   const tomorrow = addDays(date, 1);
   const tomorrowPlanned = isToday && hasPlan(data, tomorrow);
   const planBonus = isToday && !data.claims[`plan|${tomorrow}`];
-  if (!isToday && all.length === 0 && !day?.note) return null;
+  if (!isToday && total === 0 && !day?.note) return null;
 
   return (
     <Panel
       title={isToday ? 'Today’s plan' : 'Plan for the day'}
       right={
-        all.length > 0 ? (
+        total > 0 ? (
           <span className="text-xs text-mute tabular-nums">
-            {all.filter((p) => p.done).length}/{all.length}
+            {doneCount}/{total}
           </span>
         ) : undefined
       }
@@ -212,7 +218,32 @@ function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolea
           ))}
         </ul>
       )}
-      {all.length === 0 && <p className="text-sm text-mute">Nothing was planned for {isToday ? 'today' : 'this day'}.</p>}
+      {quests.length > 0 && (
+        <ul className={`space-y-1.5 ${items.length > 0 ? 'mt-1.5' : ''}`}>
+          {quests.map((q) => {
+            const done = q.doneDate !== null;
+            return (
+              <li key={q.id} className="flex items-center gap-3 rounded-lg px-1 py-0.5">
+                <button
+                  type="button"
+                  aria-pressed={done}
+                  aria-label={`${done ? 'Undo' : 'Complete'} ${q.title}`}
+                  onClick={() => toggleQuest(q.id, date)}
+                  className="flex size-[30px] shrink-0 items-center justify-center rounded-lg border-2 transition-transform hover:scale-105"
+                  style={{ borderColor: statColor(q.stat), background: done ? statColor(q.stat) : 'transparent', color: 'var(--color-void)' }}
+                >
+                  {done && <Check size={15} strokeWidth={3} className="animate-pop" />}
+                </button>
+                <span className={`min-w-0 flex-1 text-sm break-words ${done ? 'text-mute line-through' : ''}`}>{q.title}</span>
+                <span className={`shrink-0 text-xs ${done ? 'font-semibold text-gold' : 'text-mute'}`}>
+                  {done ? `+${q.xp} XP` : 'Quest'}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {total === 0 && <p className="text-sm text-mute">Nothing was planned for {isToday ? 'today' : 'this day'}.</p>}
       {day?.note && <p className="mt-3 border-l-2 border-edge pl-3 text-sm whitespace-pre-line text-mute">{day.note}</p>}
       {(day?.wake || day?.bed) && (
         <p className="mt-2 text-xs text-mute tabular-nums">
@@ -259,8 +290,15 @@ export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPl
   };
 
   const due = useMemo(() => dueHabits(data, date).sort(byCategoryThenName), [data, date]);
+  // What was decided on the Plan page: picked habits lead the list, skipped ones are left out.
+  const choices = useMemo(() => habitChoices(data, date), [data, date]);
+  const isPlanned = (h: Habit) => choices.get(h.id) === 'pick' || choices.get(h.id) === 'extra';
+  const planned = due.filter(isPlanned);
   const scheduled = due.filter((h) => h.schedule.kind === 'weekdays');
-  const weekly = due.filter((h) => h.schedule.kind === 'perWeek');
+  const weekly = due.filter((h) => h.schedule.kind === 'perWeek' && !isPlanned(h));
+  const skipped = Object.values(data.habits).filter(
+    (h) => choices.get(h.id) === 'skip' && isScheduledOn(h, date) && !isDone(data, h.id, date),
+  );
   const quests = useMemo(() => dailyQuests(data, date), [data, date]);
 
   const doneCount = scheduled.filter((h) => isDone(data, h.id, date)).length;
@@ -332,7 +370,23 @@ export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPl
             ) : hideDone && doneCount === scheduled.length ? (
               <Empty>Everything scheduled is done.</Empty>
             ) : (
-              <HabitGroups habits={scheduled} date={date} hideDone={hideDone} />
+              <div className="space-y-5">
+                {planned.length > 0 && <HabitGroups habits={planned} date={date} hideDone={hideDone} planned />}
+                <HabitGroups habits={scheduled.filter((h) => !isPlanned(h))} date={date} hideDone={hideDone} />
+              </div>
+            )}
+            {skipped.length > 0 && (
+              <p className="mt-4 text-xs text-mute">
+                Skipped for {offset === 0 ? 'today' : 'this day'}, streak kept: {skipped.map((h) => h.name).join(', ')}.
+                {offset === 0 && (
+                  <>
+                    {' '}
+                    <button type="button" className="text-glow underline-offset-2 hover:underline" onClick={() => onPlan(0)}>
+                      Change
+                    </button>
+                  </>
+                )}
+              </p>
             )}
           </Panel>
 

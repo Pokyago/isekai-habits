@@ -9,14 +9,14 @@ import type { TxInput } from '../../money/actions';
 import { activeTransactions, balance, budgetStatus, monthSummary } from '../../money/calc';
 import { categoryName } from '../../money/categories';
 import { CURRENCIES, DEFAULT_CURRENCY, formatMonth, monthOf, parseAmount } from '../../money/format';
-import { subscriptionTotals, upcomingCharges } from '../../money/subscriptions';
+import { fixedCosts, upcomingCharges } from '../../money/subscriptions';
 import { AmountInput, BalanceForm, BudgetForm, Stats, TransactionForm, useMoney } from './forms';
 import { Charts } from './Charts';
 import { DebtList, GoalList, Plans } from './Plans';
-import { Subscriptions, inDays } from './Subscriptions';
+import { Bills, FixedCosts, Subscriptions, inDays } from './Subscriptions';
 import { Transactions, TxRow } from './Transactions';
 
-type View = 'overview' | 'entries' | 'charts' | 'plans' | 'subs';
+type View = 'overview' | 'entries' | 'charts' | 'plans' | 'subs' | 'bills';
 
 export function Money() {
   const hasMoney = useGame((s) => s.data.money !== null);
@@ -37,7 +37,7 @@ export function Money() {
           <Plus size={16} /> Add entry
         </Button>
       </div>
-      <div className="max-w-3xl">
+      <div className="max-w-4xl">
       <Segmented<View>
         label="Money section"
         value={view}
@@ -48,17 +48,19 @@ export function Money() {
           { value: 'charts', label: 'Charts' },
           { value: 'plans', label: 'Debts & goals' },
           { value: 'subs', label: 'Subscriptions' },
+          { value: 'bills', label: 'Monthly bills' },
         ]}
       />
       </div>
 
       {view === 'overview' && (
-        <Overview onAdd={add} onEdit={edit} onSeeAll={() => setView('entries')} onSeeSubs={() => setView('subs')} />
+        <Overview onAdd={add} onEdit={edit} onSeeAll={() => setView('entries')} onOpen={setView} />
       )}
       {view === 'entries' && <Transactions onEdit={edit} />}
       {view === 'charts' && <Charts />}
       {view === 'plans' && <Plans onAdd={add} />}
       {view === 'subs' && <Subscriptions />}
+      {view === 'bills' && <Bills />}
 
       {form && <TransactionForm tx={form.tx} initial={form.initial} onClose={() => setForm(null)} />}
     </div>
@@ -124,12 +126,12 @@ function Overview({
   onAdd,
   onEdit,
   onSeeAll,
-  onSeeSubs,
+  onOpen,
 }: {
   onAdd(initial?: Partial<TxInput>): void;
   onEdit(tx: Transaction): void;
   onSeeAll(): void;
-  onSeeSubs(): void;
+  onOpen(view: View): void;
 }) {
   const { data, today, fmt } = useMoney();
   const [correcting, setCorrecting] = useState(false);
@@ -149,10 +151,10 @@ function Overview({
   );
   const hasDebts = Object.values(data.debts).some((d) => !d.deleted);
   const hasGoals = Object.values(data.goals).some((g) => !g.deleted);
-  const subs = useMemo(() => subscriptionTotals(data), [data]);
-  // Charges coming up in the next two weeks, at most three.
+  const fixed = useMemo(() => fixedCosts(data, today), [data, today]);
+  // Subscriptions and bills coming up in the next two weeks, at most four.
   const dueSoon = useMemo(
-    () => upcomingCharges(data, today).filter((u) => daysBetween(today, u.date) <= 14).slice(0, 3),
+    () => upcomingCharges(data, today).filter((u) => daysBetween(today, u.date) <= 14).slice(0, 4),
     [data, today],
   );
   const net = summary.income - summary.out;
@@ -250,31 +252,20 @@ function Overview({
         </Panel>
       )}
 
-      {subs.count > 0 && (
-        <Panel
-          title="Subscriptions"
-          right={
-            <Button variant="ghost" className="-mr-2 min-h-8" onClick={onSeeSubs}>
-              See all
-            </Button>
-          }
-        >
-          <p className="text-sm">
-            <strong className="tabular-nums">{fmt(subs.perMonth)}</strong> a month across {subs.count}{' '}
-            {subs.count === 1 ? 'subscription' : 'subscriptions'}.
-          </p>
-          {dueSoon.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm">
-              {dueSoon.map(({ sub, date }) => (
-                <li key={sub.id} className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate">
-                    {sub.name} <span className="text-xs text-mute">{inDays(daysBetween(today, date))}</span>
-                  </span>
-                  <span className="shrink-0 text-mute tabular-nums">{fmt(sub.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+      {fixed.perMonth > 0 && <FixedCosts onOpen={onOpen} className="lg:col-span-2" />}
+
+      {dueSoon.length > 0 && (
+        <Panel title="Due in the next two weeks">
+          <ul className="space-y-1 text-sm">
+            {dueSoon.map(({ sub, date }) => (
+              <li key={sub.id} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate">
+                  {sub.name} <span className="text-xs text-mute">{inDays(daysBetween(today, date))}</span>
+                </span>
+                <span className="shrink-0 text-mute tabular-nums">{fmt(sub.amount)}</span>
+              </li>
+            ))}
+          </ul>
         </Panel>
       )}
 

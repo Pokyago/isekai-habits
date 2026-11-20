@@ -4,8 +4,17 @@ import { Button, Empty, Field, Modal, Panel, Segmented, inputClass } from '../..
 import { useGame } from '../../data/store';
 import type { Subscription } from '../../data/types';
 import { daysBetween, formatLong, formatShort } from '../../game/dates';
+import { EXPENSE_CATEGORIES, NOT_SPENDING, categoryName, guessCategory } from '../../money/categories';
 import { amountText, parseAmount } from '../../money/format';
-import { nextCharge, perMonth, subscriptionTotals, upcomingCharges } from '../../money/subscriptions';
+import {
+  chargeCategory,
+  fixedCosts,
+  nextCharge,
+  perMonth,
+  subscriptionTotals,
+  upcomingCharges,
+  type ChargeType,
+} from '../../money/subscriptions';
 import { AmountInput, Stats, useMoney } from './forms';
 
 /** "today", "tomorrow", "in 12 days". */
@@ -17,24 +26,169 @@ export function inDays(days: number): string {
 
 const SOON_DAYS = 7;
 
+/** The words that differ between the two pages. Everything else is shared. */
+const WORDS: Record<
+  ChargeType,
+  {
+    title: string;
+    one: string;
+    many: string;
+    empty: string;
+    add: string;
+    next: string;
+    ended: string;
+    newTitle: string;
+    editTitle: string;
+    placeholder: string;
+    notePlaceholder: string;
+    dateLabel: string;
+    still: string;
+    stillHint: string;
+  }
+> = {
+  subscription: {
+    title: 'Subscriptions',
+    one: 'subscription',
+    many: 'subscriptions',
+    empty: 'Add everything you subscribe to, by the month or by the year: streaming, software, memberships, insurance.',
+    add: 'Add a subscription',
+    next: 'Next charges',
+    ended: 'Cancelled',
+    newTitle: 'New subscription',
+    editTitle: 'Edit subscription',
+    placeholder: 'e.g. Netflix, iCloud+',
+    notePlaceholder: 'e.g. family plan, shared with Ana',
+    dateLabel: 'Next charge date',
+    still: 'Still subscribed',
+    stillHint: '(untick when you cancel, to keep it on record)',
+  },
+  bill: {
+    title: 'Monthly bills',
+    one: 'bill',
+    many: 'bills',
+    empty: 'Add what you pay every month to keep your life running: lessons, the gym, your dog’s bath, the cleaner, a health plan.',
+    add: 'Add a bill',
+    next: 'Next due',
+    ended: 'Stopped',
+    newTitle: 'New monthly bill',
+    editTitle: 'Edit bill',
+    placeholder: 'e.g. Japanese lessons, gym, dog’s bath',
+    notePlaceholder: 'e.g. twice a week, paid by Pix',
+    dateLabel: 'Next date it is due',
+    still: 'Still paying this',
+    stillHint: '(untick when it stops, to keep it on record)',
+  },
+};
+
+const PAID_WITH: Record<Subscription['paidWith'], string> = {
+  card: 'Charged to the credit card',
+  bank: 'Taken from the bank account; the entry is added for you',
+  manual: 'Paid from the bank account; you record the entry',
+};
+
+/**
+ * What leaves every month whatever else happens: subscriptions, monthly bills and
+ * any other repeating expenses, added together. Shown above both lists and on the overview.
+ */
+export function FixedCosts({
+  onOpen,
+  className = '',
+}: {
+  /** When given, each line is a button that opens its page. */
+  onOpen?(view: 'subs' | 'bills' | 'plans'): void;
+  className?: string;
+}) {
+  const { data, today, fmt } = useMoney();
+  const costs = useMemo(() => fixedCosts(data, today), [data, today]);
+  const lines: { view: 'subs' | 'bills' | 'plans'; label: string; count: number; amount: number }[] = [
+    { view: 'subs', label: 'Subscriptions', count: costs.subscriptions.count, amount: costs.subscriptions.perMonth },
+    { view: 'bills', label: 'Monthly bills', count: costs.bills.count, amount: costs.bills.perMonth },
+  ];
+  // Rent, instalments and the like, set to repeat on the Debts & goals page.
+  if (costs.other.count > 0) lines.push({ view: 'plans', label: 'Other monthly expenses', count: costs.other.count, amount: costs.other.perMonth });
+  const top = Math.max(1, ...lines.map((l) => l.amount));
+
+  return (
+    <Panel title="Fixed costs every month" className={className}>
+      <div className="grid items-center gap-x-8 gap-y-4 md:grid-cols-[auto_minmax(0,1fr)]">
+        <div>
+          <p className="font-display text-4xl font-bold tabular-nums">{fmt(costs.perMonth)}</p>
+          <p className="mt-1 text-sm text-mute">
+            leaves every month before anything else · <span className="tabular-nums">{fmt(costs.perYear)}</span> a year
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {lines.map((l) => {
+            const row = (
+              <>
+                <span className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="whitespace-nowrap">
+                    {l.label} <span className="text-xs text-mute">· {l.count}</span>
+                  </span>
+                  <span className="font-semibold tabular-nums">{fmt(l.amount)}</span>
+                </span>
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-void/80 ring-1 ring-edge/60">
+                  <span
+                    className="block h-full rounded-full bg-gold transition-[width] duration-500"
+                    style={{ width: `${(l.amount / top) * 100}%` }}
+                  />
+                </span>
+              </>
+            );
+            return (
+              <li key={l.view}>
+                {onOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(l.view)}
+                    className="-mx-2 block w-[calc(100%+1rem)] rounded-lg px-2 py-1 text-left transition-colors hover:bg-raise"
+                  >
+                    {row}
+                  </button>
+                ) : (
+                  <div className="py-1">{row}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      {costs.perMonth === 0 && (
+        <p className="mt-3 text-xs text-mute">Add your subscriptions and monthly bills, and this adds them all up.</p>
+      )}
+    </Panel>
+  );
+}
+
 export function Subscriptions() {
+  return <Charges type="subscription" />;
+}
+
+export function Bills() {
+  return <Charges type="bill" />;
+}
+
+function Charges({ type }: { type: ChargeType }) {
   const { data, today, fmt } = useMoney();
   const [editing, setEditing] = useState<Subscription | 'new' | null>(null);
+  const words = WORDS[type];
 
-  const totals = useMemo(() => subscriptionTotals(data), [data]);
-  const upcoming = useMemo(() => upcomingCharges(data, today), [data, today]);
-  const cancelled = useMemo(
+  const totals = useMemo(() => subscriptionTotals(data, type), [data, type]);
+  const upcoming = useMemo(() => upcomingCharges(data, today, type), [data, today, type]);
+  const ended = useMemo(
     () =>
       Object.values(data.subscriptions)
-        .filter((s) => !s.deleted && !s.active)
+        .filter((s) => !s.deleted && !s.active && (s.type ?? 'subscription') === type)
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [data],
+    [data, type],
   );
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
+      <FixedCosts className="lg:col-span-2" />
+
       <Panel
-        title="Subscriptions"
+        title={words.title}
         right={
           <Button variant="ghost" className="-mr-2 min-h-8" onClick={() => setEditing('new')}>
             <Plus size={16} /> Add
@@ -43,12 +197,9 @@ export function Subscriptions() {
       >
         {totals.count === 0 ? (
           <div className="text-center">
-            <Empty>
-              Add everything you pay for regularly, by the month or by the year: streaming, software, memberships,
-              insurance.
-            </Empty>
+            <Empty>{words.empty}</Empty>
             <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus size={16} /> Add a subscription
+              <Plus size={16} /> {words.add}
             </Button>
           </div>
         ) : (
@@ -57,8 +208,8 @@ export function Subscriptions() {
               {fmt(totals.perMonth)} <span className="text-base font-normal text-mute">a month</span>
             </p>
             <p className="mt-1 mb-4 text-sm text-mute">
-              {totals.count} active {totals.count === 1 ? 'subscription' : 'subscriptions'}. Yearly ones are spread over
-              twelve months.
+              {totals.count} active {totals.count === 1 ? words.one : words.many}. Yearly ones are spread over twelve
+              months.
             </p>
             <Stats
               items={[
@@ -72,7 +223,7 @@ export function Subscriptions() {
       </Panel>
 
       {upcoming.length > 0 && (
-        <Panel title="Next charges">
+        <Panel title={words.next}>
           <ul className="space-y-1">
             {upcoming.map(({ sub, date }) => {
               const days = daysBetween(today, date);
@@ -86,7 +237,7 @@ export function Subscriptions() {
                   >
                     <span
                       className={`flex size-9 shrink-0 items-center justify-center rounded-lg border ${soon ? 'border-gold/60 text-gold' : 'border-edge text-mute'}`}
-                      title={sub.paidWith === 'card' ? 'Charged to the credit card' : 'Taken from the bank account'}
+                      title={PAID_WITH[sub.paidWith]}
                     >
                       {sub.paidWith === 'card' ? <CreditCard size={16} /> : <Landmark size={16} />}
                     </span>
@@ -95,6 +246,7 @@ export function Subscriptions() {
                       <span className={`block truncate text-[11px] ${soon ? 'text-gold' : 'text-mute'}`}>
                         {formatShort(date)} · {inDays(days)}
                         {sub.cycle === 'yearly' ? ' · yearly' : ''}
+                        {type === 'bill' ? ` · ${categoryName(chargeCategory(sub))}` : ''}
                         {sub.note ? ` · ${sub.note}` : ''}
                       </span>
                     </span>
@@ -110,16 +262,16 @@ export function Subscriptions() {
             })}
           </ul>
           <p className="mt-3 text-xs text-mute">
-            Ones taken from the bank account are added to your entries on the day they are charged. Ones on the credit
-            card are only listed here, because they are already part of the card bill.
+            Only the ones set to “Bank: add the entry” put an entry in your account on their day. The others are just
+            listed here, so nothing is counted twice with your card bill or an imported statement.
           </p>
         </Panel>
       )}
 
-      {cancelled.length > 0 && (
-        <Panel title="Cancelled">
+      {ended.length > 0 && (
+        <Panel title={words.ended}>
           <ul className="space-y-1">
-            {cancelled.map((sub) => (
+            {ended.map((sub) => (
               <li key={sub.id}>
                 <button
                   type="button"
@@ -137,37 +289,47 @@ export function Subscriptions() {
         </Panel>
       )}
 
-      {editing && <SubscriptionForm sub={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+      {editing && <ChargeForm type={type} sub={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
-function SubscriptionForm({ sub, onClose }: { sub?: Subscription; onClose(): void }) {
+function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscription; onClose(): void }) {
   const { today, currency } = useMoney();
   const saveSubscription = useGame((s) => s.saveSubscription);
   const deleteSubscription = useGame((s) => s.deleteSubscription);
+  const words = WORDS[type];
+  const isBill = type === 'bill';
 
   const [name, setName] = useState(sub?.name ?? '');
   const [amountField, setAmountField] = useState(sub ? amountText(sub.amount, currency) : '');
   const [cycle, setCycle] = useState<Subscription['cycle']>(sub?.cycle ?? 'monthly');
   // When editing, show the upcoming charge rather than whichever past date was first entered.
   const [anchor, setAnchor] = useState(sub ? nextCharge(sub, today) : today);
-  const [paidWith, setPaidWith] = useState<Subscription['paidWith']>(sub?.paidWith ?? 'card');
+  // A bill is usually paid from the account and shows up in the statement; a subscription usually sits on the card.
+  const [paidWith, setPaidWith] = useState<Subscription['paidWith']>(sub?.paidWith ?? (isBill ? 'manual' : 'card'));
   const [active, setActive] = useState(sub?.active ?? true);
   const [note, setNote] = useState(sub?.note ?? '');
+  // The category follows the name until one is picked by hand.
+  const [picked, setPicked] = useState<string | null>(sub ? chargeCategory(sub) : null);
+  const guessed = guessCategory(name, 'expense');
+  const category = picked ?? (guessed === 'other' ? 'bills' : guessed);
 
   const amount = amountField.trim() === '' ? null : parseAmount(amountField, currency);
   const valid = name.trim() !== '' && amount !== null && amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(anchor);
   const next = valid ? nextCharge({ anchor, cycle }, today) : null;
 
   return (
-    <Modal title={sub ? 'Edit subscription' : 'New subscription'} onClose={onClose}>
+    <Modal title={sub ? words.editTitle : words.newTitle} onClose={onClose}>
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
           if (!valid) return;
-          saveSubscription({ name, amount: amount!, cycle, anchor, paidWith, active, note }, sub?.id);
+          saveSubscription(
+            { name, amount: amount!, cycle, anchor, paidWith, active, note, ...(isBill ? { type: 'bill' as const, category } : {}) },
+            sub?.id,
+          );
           onClose();
         }}
       >
@@ -176,14 +338,14 @@ function SubscriptionForm({ sub, onClose }: { sub?: Subscription; onClose(): voi
             className={inputClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Netflix, iCloud+, gym"
+            placeholder={words.placeholder}
             maxLength={60}
             autoFocus={!sub}
           />
         </Field>
 
         <div>
-          <span className="mb-1.5 block text-xs font-medium text-mute">How often is it charged?</span>
+          <span className="mb-1.5 block text-xs font-medium text-mute">How often is it paid?</span>
           <Segmented<Subscription['cycle']>
             label="Billing cycle"
             value={cycle}
@@ -202,11 +364,23 @@ function SubscriptionForm({ sub, onClose }: { sub?: Subscription; onClose(): voi
           <AmountInput amount={{ text: amountField, setText: setAmountField }} currency={currency} label="Price" />
         </div>
 
-        <Field label="Next charge date">
+        {isBill && (
+          <Field label="Category">
+            <select className={inputClass} value={category} onChange={(e) => setPicked(e.target.value)}>
+              {EXPENSE_CATEGORIES.filter((c) => !NOT_SPENDING.has(c.id) && c.id !== 'card').map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <Field label={words.dateLabel}>
           <input type="date" className={inputClass} value={anchor} onChange={(e) => setAnchor(e.target.value)} />
         </Field>
         {next && next !== anchor && (
-          <p className="-mt-2 text-xs text-mute">That date has passed, so the next charge is {formatLong(next)}.</p>
+          <p className="-mt-2 text-xs text-mute">That date has passed, so the next one is {formatLong(next)}.</p>
         )}
 
         <div>
@@ -217,13 +391,16 @@ function SubscriptionForm({ sub, onClose }: { sub?: Subscription; onClose(): voi
             onChange={setPaidWith}
             options={[
               { value: 'card', label: 'Credit card' },
-              { value: 'bank', label: 'Bank account' },
+              { value: 'manual', label: 'Bank: just track' },
+              { value: 'bank', label: 'Bank: add the entry' },
             ]}
           />
           <p className="mt-1.5 text-xs text-mute">
             {paidWith === 'card'
               ? 'Only tracked here. The charge is already inside your card bill, so no entry is added.'
-              : 'An entry is added to your bank account on each charge date, starting with the next one.'}
+              : paidWith === 'manual'
+                ? 'Only tracked here. Choose this if you import your bank statement or record the payment yourself, so it isn’t counted twice.'
+                : 'An entry is added to your bank account on each date it is due, starting with the next one.'}
           </p>
         </div>
 
@@ -233,15 +410,15 @@ function SubscriptionForm({ sub, onClose }: { sub?: Subscription; onClose(): voi
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={80}
-            placeholder="e.g. family plan, shared with Ana"
+            placeholder={words.notePlaceholder}
           />
         </Field>
 
         {sub && (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="size-4" checked={active} onChange={(e) => setActive(e.target.checked)} />
-            Still subscribed
-            <span className="text-xs text-mute">(untick when you cancel, to keep it on record)</span>
+            {words.still}
+            <span className="text-xs text-mute">{words.stillHint}</span>
           </label>
         )}
 

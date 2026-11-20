@@ -54,6 +54,8 @@ export interface Quest {
   stat: StatKey;
   difficulty: Difficulty;
   doneDate: DateStr | null;
+  /** The day it was put on the plan for, if any. */
+  plannedFor?: DateStr | null;
   xp: number;
   gold: number;
   createdAt: number;
@@ -110,6 +112,19 @@ export interface PlanItem {
   gold: number;
   createdAt: number;
   deleted: boolean;
+  updatedAt: number;
+}
+
+/**
+ * A choice made about one habit on one day while planning. Its id is `${habitId}|${date}`.
+ * 'pick': a priority for the day. 'skip': not happening that day, and its streak is kept.
+ * 'extra': done that day although it isn't one of its usual days. 'none': the choice was undone.
+ */
+export interface HabitDay {
+  id: string;
+  habitId: string;
+  date: DateStr;
+  state: 'pick' | 'skip' | 'extra' | 'none';
   updatedAt: number;
 }
 
@@ -216,10 +231,17 @@ export interface Recurring {
   updatedAt: number;
 }
 
-/** A subscription: something charged every month or every year (streaming, software, memberships). */
+/**
+ * Something paid at a fixed price every month or every year. Either a subscription
+ * (streaming, software, memberships) or a monthly bill (lessons, the gym, the dog's bath).
+ */
 export interface Subscription {
   id: string;
   name: string;
+  /** 'bill' for a monthly bill; absent for a subscription. */
+  type?: 'bill';
+  /** The spending category its entries get. Absent means Subscriptions, or Bills & utilities for a bill. */
+  category?: string;
   /** What one charge costs: per month, or per year for a yearly one. */
   amount: number;
   cycle: 'monthly' | 'yearly';
@@ -228,8 +250,9 @@ export interface Subscription {
   /**
    * 'bank': each charge is added to the entries automatically.
    * 'card': tracked only, since the charge is already inside the credit card bill.
+   * 'manual': paid from the bank account but tracked only; the entry is recorded by hand or comes in with a statement.
    */
-  paidWith: 'bank' | 'card';
+  paidWith: 'bank' | 'card' | 'manual';
   /** False once cancelled or paused: kept in the list but not counted or charged. */
   active: boolean;
   note: string;
@@ -268,7 +291,7 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 6;
+  version: 7;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
@@ -290,4 +313,6 @@ export interface SaveData {
   plan: Record<string, PlanItem>;
   /** Wake-up time, bedtime and a note for a day, keyed by date. */
   days: Record<string, DayPlan>;
+  /** Habits picked, skipped or added for particular days. */
+  habitDays: Record<string, HabitDay>;
 }

@@ -16,7 +16,7 @@ import { balance, debtRemaining, goalSaved, monthSummary } from './calc';
 import { ADJUSTMENT } from './categories';
 import { addMonths, dayInMonth, monthOf } from './format';
 import type { ImportRow } from './statement';
-import { nextCharge } from './subscriptions';
+import { chargeCategory, nextCharge } from './subscriptions';
 
 /*
  * Every change to the money records goes through these functions. Like the game
@@ -164,9 +164,12 @@ export interface SubscriptionInput {
   cycle: 'monthly' | 'yearly';
   /** A date it is charged on; usually the next one. */
   anchor: DateStr;
-  paidWith: 'bank' | 'card';
+  paidWith: 'bank' | 'card' | 'manual';
   active: boolean;
   note: string;
+  /** 'bill' for a monthly bill; leave out for a subscription. */
+  type?: 'bill';
+  category?: string;
 }
 
 export function saveSubscription(
@@ -181,6 +184,8 @@ export function saveSubscription(
   const sub: Subscription = {
     id: prev?.id ?? newId(),
     ...input,
+    // What kind of thing it is never changes after it is added.
+    type: prev ? prev.type : input.type,
     name: input.name.trim(),
     note: input.note.trim(),
     amount: Math.round(input.amount),
@@ -342,7 +347,7 @@ function addDueSubscriptions(data: SaveData, today: DateStr): SaveData {
         date,
         kind: 'expense',
         amount: s.amount,
-        category: 'subscriptions',
+        category: chargeCategory(s),
         note: s.name,
         goalId: null,
         debtId: null,

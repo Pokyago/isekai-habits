@@ -1,14 +1,12 @@
 import { ArrowRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PlanTick, TimeInput } from '../components/PlanBits';
-import { Button, Empty, Field, IconButton, Panel, inputBase, inputClass } from '../components/ui';
-import { categoryIndex, habitCategory } from '../data/habitCategories';
+import { Button, Field, IconButton, Panel, inputBase, inputClass } from '../components/ui';
 import { WEEKDAY_LABELS } from '../data/meta';
 import { useGame } from '../data/store';
-import { categoryOf } from '../data/templates';
 import type { DateStr, DayPlan, PlanItem } from '../data/types';
 import { addDays, formatLong, formatShort, parseDate, weekday } from '../game/dates';
-import { dueHabits, isDone, weekCount } from '../game/schedule';
+import { dueHabits } from '../game/schedule';
 import { averageSleep, formatSleep, sleepLogs } from '../health/health';
 import { useToday } from '../hooks';
 import { formatMoney } from '../money/format';
@@ -25,6 +23,7 @@ import {
   shiftTime,
   unfinishedBefore,
 } from '../plan/plan';
+import { HabitBoard, IdeaBoard, QuestBoard } from './PlanBoards';
 
 /** How many days can be planned: today and the six after it. */
 const DAYS = 7;
@@ -36,8 +35,10 @@ function dayName(offset: number, date: DateStr): string {
 }
 
 /**
- * Plan a day before it starts: its main goal, other goals and appointments, when
- * to get up, and a note. It opens on tomorrow; any of the next days can be picked.
+ * Plan a day before it starts. On the left, things to choose from by clicking, as
+ * on Today: the day's habits, open quests and ready-made goals. On the right, what
+ * has been written down: goals and appointments, when to get up, and a note.
+ * It opens on tomorrow; any of the next days can be picked.
  */
 export function Plan({ startOn = 1 }: { startOn?: number }) {
   const data = useGame((s) => s.data);
@@ -97,13 +98,17 @@ export function Plan({ startOn = 1 }: { startOn?: number }) {
         <div className="space-y-4">
           {/* Keyed by date, so what is being typed for one day doesn't carry over to another. */}
           <MainGoal key={`main|${date}`} date={date} main={plan.main} canTick={canTick} tomorrow={offset === 1} />
-          <Goals key={`goals|${date}`} date={date} items={plan.items} canTick={canTick} />
-          {leftover.length > 0 && <Leftover items={leftover} date={date} name={name} />}
+          <HabitBoard key={`habits|${date}`} date={date} isToday={offset === 0} />
+          <QuestBoard date={date} />
+          <IdeaBoard date={date} items={plan.items} />
         </div>
 
-        <aside className="space-y-4">
+        {/* On a wide window this column stays in view while the boards scroll. */}
+        <aside className="space-y-4 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto xl:pr-1">
+          <Goals key={`goals|${date}`} date={date} items={plan.items} canTick={canTick} />
+          {leftover.length > 0 && <Leftover items={leftover} date={date} name={name} />}
           <DayFrame key={`frame|${date}`} date={date} day={plan.day} />
-          <OnTheDay date={date} isToday={offset === 0} />
+          <MoneyOnDay date={date} />
           <Note key={`note|${date}`} date={date} note={plan.day?.note ?? ''} />
         </aside>
       </div>
@@ -212,7 +217,7 @@ function Goals({ date, items, canTick }: { date: DateStr; items: PlanItem[]; can
 
   return (
     <Panel
-      title="Other goals and appointments"
+      title="Goals and appointments"
       right={items.length > 0 ? <span className="text-xs text-mute tabular-nums">{canTick ? `${done}/${items.length} done` : items.length}</span> : undefined}
     >
       {items.length > 0 && (
@@ -265,7 +270,7 @@ function Goals({ date, items, canTick }: { date: DateStr; items: PlanItem[]; can
           className={`${inputBase} min-w-48 flex-[3]`}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Add a goal or an appointment, e.g. Gym, or Dentist"
+          placeholder="Type your own, e.g. Dentist"
           aria-label="New goal or appointment"
           maxLength={100}
         />
@@ -387,89 +392,27 @@ function DayFrame({ date, day }: { date: DateStr; day: DayPlan | null }) {
   );
 }
 
-/** What the day already holds without any planning: its habits, and money that moves. */
-function OnTheDay({ date, isToday }: { date: DateStr; isToday: boolean }) {
+/** Monthly items, subscriptions and bills that fall on the day. */
+function MoneyOnDay({ date }: { date: DateStr }) {
   const data = useGame((s) => s.data);
-  const due = useMemo(() => dueHabits(data, date), [data, date]);
   const money = useMemo(() => moneyDue(data, date), [data, date]);
-  const scheduled = due.filter((h) => h.schedule.kind === 'weekdays');
-  const weekly = due.filter((h) => h.schedule.kind === 'perWeek');
-
-  const groups = new Map<string, string[]>();
-  for (const h of [...scheduled].sort((a, b) => categoryIndex(categoryOf(a)) - categoryIndex(categoryOf(b)) || a.name.localeCompare(b.name))) {
-    const id = categoryOf(h);
-    groups.set(id, [...(groups.get(id) ?? []), h.name]);
-  }
-  const done = scheduled.filter((h) => isDone(data, h.id, date)).length;
-  const label = 'mb-1.5 text-[11px] font-semibold tracking-wide text-mute uppercase';
-
+  if (money.length === 0 || !data.money) return null;
   return (
-    <Panel
-      title="Already on this day"
-      right={
-        scheduled.length > 0 ? (
-          <span className="text-xs text-mute tabular-nums">
-            {isToday ? `${done}/${scheduled.length} habits done` : `${scheduled.length} ${scheduled.length === 1 ? 'habit' : 'habits'}`}
-          </span>
-        ) : undefined
-      }
-    >
-      {scheduled.length === 0 && weekly.length === 0 && money.length === 0 ? (
-        <Empty>No habits are scheduled and no money moves on this day.</Empty>
-      ) : (
-        <div className="space-y-4">
-          {groups.size > 0 && (
-            <div>
-              <h3 className={label}>Habits</h3>
-              <dl className="space-y-1.5 text-sm">
-                {[...groups].map(([id, names]) => (
-                  <div key={id} className="flex gap-3">
-                    <dt className="w-24 shrink-0 text-mute">{habitCategory(id).name}</dt>
-                    <dd className="min-w-0 flex-1">{names.join(' · ')}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
-          {weekly.length > 0 && (
-            <div>
-              <h3 className={label}>Any day this week</h3>
-              <ul className="space-y-1 text-sm">
-                {weekly.map((h) => {
-                  const times = h.schedule.kind === 'perWeek' ? h.schedule.times : 0;
-                  return (
-                    <li key={h.id} className="flex justify-between gap-3">
-                      <span className="min-w-0 truncate">{h.name}</span>
-                      <span className="shrink-0 text-mute tabular-nums">
-                        {Math.min(times, weekCount(data, h.id, date))} of {times}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-          {money.length > 0 && data.money && (
-            <div>
-              <h3 className={label}>Money</h3>
-              <ul className="space-y-1 text-sm">
-                {money.map((m) => (
-                  <li key={m.id} className="flex justify-between gap-3">
-                    <span className="min-w-0 truncate">
-                      {m.name}
-                      {m.onCard && <span className="text-mute"> · on the card</span>}
-                    </span>
-                    <span className={`shrink-0 tabular-nums ${m.kind === 'income' ? 'text-[var(--stat-vit)]' : ''}`}>
-                      {m.kind === 'income' ? '+' : '−'}
-                      {formatMoney(m.amount, data.money!.currency)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+    <Panel title="Money on this day">
+      <ul className="space-y-1 text-sm">
+        {money.map((m) => (
+          <li key={m.id} className="flex justify-between gap-3">
+            <span className="min-w-0 truncate">
+              {m.name}
+              {m.onCard && <span className="text-mute"> · on the card</span>}
+            </span>
+            <span className={`shrink-0 tabular-nums ${m.kind === 'income' ? 'text-[var(--stat-vit)]' : ''}`}>
+              {m.kind === 'income' ? '+' : '−'}
+              {formatMoney(m.amount, data.money!.currency)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }

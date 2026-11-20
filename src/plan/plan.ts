@@ -1,6 +1,7 @@
 import { CLASSES } from '../data/meta';
-import type { DateStr, DayPlan, PlanItem, QuestClaim, SaveData, StatKey } from '../data/types';
+import type { DateStr, DayPlan, HabitDay, PlanItem, Quest, QuestClaim, SaveData, StatKey } from '../data/types';
 import { addDays } from '../game/dates';
+import { completionId, type DayChoice } from '../game/schedule';
 import { questReward, type RewardAmount } from '../game/xp';
 import { dayInMonth, monthOf } from '../money/format';
 import { activeSubscriptions, nextCharge } from '../money/subscriptions';
@@ -62,6 +63,8 @@ export interface Plan {
   main: PlanItem | null;
   /** Everything else: timed ones first in time order, then the rest in the order they were added. */
   items: PlanItem[];
+  /** One-off tasks from the quest log that were put on this day. */
+  quests: Quest[];
   day: DayPlan | null;
 }
 
@@ -80,20 +83,44 @@ export function planFor(data: SaveData, date: DateStr): Plan {
       a.createdAt - b.createdAt ||
       a.id.localeCompare(b.id),
   );
-  return { main, items, day: data.days[date] ?? null };
+  // A quest finished on another day has left this day's plan.
+  const quests = Object.values(data.quests)
+    .filter((q) => !q.deleted && q.plannedFor === date && (q.doneDate === null || q.doneDate === date))
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  return { main, items, quests, day: data.days[date] ?? null };
+}
+
+/** The one-day choices made about habits on a date, by habit id. */
+export function habitChoices(data: SaveData, date: DateStr): Map<string, DayChoice> {
+  const out = new Map<string, DayChoice>();
+  for (const c of Object.values(data.habitDays)) {
+    if (c.date === date && c.state !== 'none' && data.habits[c.habitId] && !data.habits[c.habitId].deleted) {
+      out.set(c.habitId, c.state);
+    }
+  }
+  return out;
 }
 
 /** How many things are planned for a day, and how many are ticked off. */
 export function planProgress(data: SaveData, date: DateStr): { total: number; done: number } {
-  const { main, items } = planFor(data, date);
+  const { main, items, quests } = planFor(data, date);
   const all = main ? [main, ...items] : items;
-  return { total: all.length, done: all.filter((p) => p.done).length };
+  return {
+    total: all.length + quests.length,
+    done: all.filter((p) => p.done).length + quests.filter((q) => q.doneDate !== null).length,
+  };
 }
 
 /** Whether anything at all has been written down for a day. */
 export function hasPlan(data: SaveData, date: DateStr): boolean {
-  const { main, items, day } = planFor(data, date);
-  return main !== null || items.length > 0 || (day !== null && (day.wake !== null || day.bed !== null || day.note !== ''));
+  const { main, items, quests, day } = planFor(data, date);
+  return (
+    main !== null ||
+    items.length > 0 ||
+    quests.length > 0 ||
+    habitChoices(data, date).size > 0 ||
+    (day !== null && (day.wake !== null || day.bed !== null || day.note !== ''))
+  );
 }
 
 /** Planned things that were never ticked off, from the `days` days before `before`. Oldest first. */
@@ -245,6 +272,35 @@ export function movePlanItem(data: SaveData, id: string, toDate: DateStr, now: n
     return put(removed, { ...target, title: prev.title, deleted: false, updatedAt: stamp(target, now) });
   }
   return put(removed, fresh(newId, toDate, prev.title, false, null, now));
+}
+
+/**
+ * Records a one-day choice about a habit, or undoes it with null: a priority for
+ * the day, skipped, or added for just that day. Days that have passed can't be changed.
+ */
+export function setHabitChoice(
+  data: SaveData,
+  habitId: string,
+  date: DateStr,
+  choice: DayChoice | null,
+  today: DateStr,
+  now: number,
+): SaveData {
+  const habit = data.habits[habitId];
+  if (!habit || habit.deleted || date < today) return data;
+  const id = completionId(habitId, date);
+  const prev = data.habitDays[id];
+  const state: HabitDay['state'] = choice ?? 'none';
+  if (prev ? prev.state === state : state === 'none') return data;
+  const record: HabitDay = { id, habitId, date, state, updatedAt: stamp(prev, now) };
+  return { ...data, habitDays: { ...data.habitDays, [id]: record } };
+}
+
+/** Puts a one-off task from the quest log on a day's plan, or takes it off again with null. */
+export function planQuest(data: SaveData, questId: string, date: DateStr | null, now: number): SaveData {
+  const prev = data.quests[questId];
+  if (!prev || prev.deleted || prev.doneDate !== null || (prev.plannedFor ?? null) === date) return data;
+  return { ...data, quests: { ...data.quests, [questId]: { ...prev, plannedFor: date, updatedAt: stamp(prev, now) } } };
 }
 
 /** Saves the wake-up time, bedtime or note for a day. Only what is passed changes. */
