@@ -1,7 +1,8 @@
 import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { HabitCard } from '../components/HabitCard';
-import { Bar, Button, Chip, Empty, IconButton, Panel, Ring, StatIcon, inputClass } from '../components/ui';
+import { SleepQuick } from '../components/SleepQuick';
+import { Bar, Button, Chip, Empty, IconButton, Panel, Ring, StatIcon, inputBase } from '../components/ui';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, statColor } from '../data/meta';
 import { categoryIndex, habitCategory } from '../data/habitCategories';
 import { useGame } from '../data/store';
@@ -219,6 +220,7 @@ export function Today({ onManageHabits }: { onManageHabits(): void }) {
         <aside className="space-y-4 xl:sticky xl:top-20 xl:order-2 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto xl:pr-1">
           <DayCard date={date} isToday={offset === 0} />
           <DailyQuests quests={quests} />
+          {offset === 0 && <SleepQuick />}
           <div className="hidden xl:block">
             <QuestLog date={date} />
           </div>
@@ -346,7 +348,7 @@ function QuestLog({ date }: { date: string }) {
         }}
       >
         <input
-          className={`${inputClass} min-w-48 flex-[3]`}
+          className={`${inputBase} min-w-48 flex-[3]`}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="New quest, e.g. Book a dentist appointment"
@@ -354,7 +356,7 @@ function QuestLog({ date }: { date: string }) {
           maxLength={100}
         />
         <select
-          className={`${inputClass} w-auto flex-1`}
+          className={`${inputBase} w-auto flex-1`}
           value={stat}
           onChange={(e) => setStat(e.target.value as StatKey)}
           aria-label="Quest stat"
@@ -366,7 +368,7 @@ function QuestLog({ date }: { date: string }) {
           ))}
         </select>
         <select
-          className={`${inputClass} w-auto flex-1`}
+          className={`${inputBase} w-auto flex-1`}
           value={difficulty}
           onChange={(e) => setDifficulty(e.target.value as Difficulty)}
           aria-label="Quest difficulty"

@@ -15,8 +15,7 @@ export interface ChartSeries {
  */
 export const CHART_COLORS = ['#3987e5', '#d95926'];
 
-const HEIGHT = 220;
-const MARGIN = { top: 14, right: 58, bottom: 26, left: 44 };
+const MARGIN = { top: 14, right: 58, bottom: 26 };
 const DAY = 86_400_000;
 const dayNumber = (date: DateStr) => Math.round(parseDate(date).getTime() / DAY);
 
@@ -47,12 +46,21 @@ export function LineChart({
   unit,
   decimals,
   format,
+  formatValue = format,
+  axisWidth = 44,
+  height: HEIGHT = 220,
   label,
 }: {
   series: ChartSeries[];
   unit: string;
   decimals: number;
+  /** Formats an axis tick. */
   format(value: number): string;
+  /** Formats an exact value in the readout and the end label. Defaults to `format`. */
+  formatValue?: (value: number) => string;
+  /** Room for the axis labels on the left. */
+  axisWidth?: number;
+  height?: number;
   /** Describes the chart for screen readers. */
   label: string;
 }) {
@@ -87,9 +95,10 @@ export function LineChart({
   const yMax = ticks[ticks.length - 1];
   const x0 = dayNumber(dates[0]);
   const x1 = dayNumber(dates[dates.length - 1]);
-  const plotW = width - MARGIN.left - MARGIN.right;
+  const left = axisWidth;
+  const plotW = width - left - MARGIN.right;
   const plotH = HEIGHT - MARGIN.top - MARGIN.bottom;
-  const x = (date: DateStr) => MARGIN.left + (x1 === x0 ? plotW / 2 : ((dayNumber(date) - x0) / (x1 - x0)) * plotW);
+  const x = (date: DateStr) => left + (x1 === x0 ? plotW / 2 : ((dayNumber(date) - x0) / (x1 - x0)) * plotW);
   const y = (value: number) => MARGIN.top + (1 - (value - yMin) / (yMax - yMin)) * plotH;
 
   const ends = series
@@ -128,6 +137,8 @@ export function LineChart({
       <div
         ref={box}
         className="relative touch-pan-y overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-glow"
+        // The drawing is positioned inside a box of fixed height, so its width never props the layout open.
+        style={{ height: HEIGHT }}
         tabIndex={0}
         role="img"
         aria-label={`${label}. Use the left and right arrow keys to read each date.`}
@@ -145,16 +156,16 @@ export function LineChart({
           });
         }}
       >
-        <svg width={width} height={HEIGHT} className="block" aria-hidden>
+        <svg width={width} height={HEIGHT} className="absolute top-0 left-0 block" aria-hidden>
           {ticks.map((t) => (
             <g key={t}>
-              <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(t)} y2={y(t)} stroke="var(--color-edge)" strokeOpacity={0.55} strokeWidth={1} />
-              <text x={MARGIN.left - 8} y={y(t)} dy="0.32em" textAnchor="end" fontSize={11} fill="var(--color-mute)">
+              <line x1={left} x2={width - MARGIN.right} y1={y(t)} y2={y(t)} stroke="var(--color-edge)" strokeOpacity={0.55} strokeWidth={1} />
+              <text x={left - 8} y={y(t)} dy="0.32em" textAnchor="end" fontSize={11} fill="var(--color-mute)">
                 {format(t)}
               </text>
             </g>
           ))}
-          <text x={MARGIN.left} y={HEIGHT - 6} fontSize={11} fill="var(--color-mute)">
+          <text x={left} y={HEIGHT - 6} fontSize={11} fill="var(--color-mute)">
             {formatShort(dates[0])}
           </text>
           {dates.length > 1 && (
@@ -186,7 +197,7 @@ export function LineChart({
               <circle cx={x(p.date)} cy={y(p.value)} r={4} fill={s.color} stroke="var(--color-panel)" strokeWidth={2} />
               {endLabelsFit && (
                 <text x={x(p.date) + 9} y={y(p.value)} dy="0.32em" fontSize={12} fontWeight={600} fill="var(--color-ink)">
-                  {format(p.value)}
+                  {formatValue(p.value)}
                 </text>
               )}
             </g>
@@ -207,7 +218,8 @@ export function LineChart({
               <p key={s.name} className="flex items-center gap-2 whitespace-nowrap">
                 <span className="h-0.5 w-3 rounded-full" style={{ background: s.color }} />
                 <strong className="text-sm text-ink tabular-nums">
-                  {format(p!.value)} {unit}
+                  {formatValue(p!.value)}
+                  {unit && ` ${unit}`}
                 </strong>
                 {series.length > 1 && <span className="text-mute">{s.name}</span>}
               </p>

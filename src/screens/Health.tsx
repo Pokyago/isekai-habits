@@ -1,19 +1,27 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { CHART_COLORS, LineChart, type ChartSeries } from '../components/LineChart';
-import { Button, Empty, Field, Modal, Panel, Segmented, inputClass } from '../components/ui';
+import { Button, Empty, Field, Modal, Panel, Segmented, inputBase, inputClass } from '../components/ui';
 import { useGame } from '../data/store';
 import type { HealthEntry } from '../data/types';
-import { addDays, daysBetween, formatLong, formatShort } from '../game/dates';
+import { WEEKDAY_LABELS } from '../data/meta';
+import { addDays, daysBetween, formatLong, formatShort, weekday } from '../game/dates';
 import {
   HEALTH_REWARD,
   METRICS,
+  SLEEP_REWARD,
+  averageSleep,
   bmi,
   checkIns,
   checkedInThisWeek,
+  formatSleep,
   latest,
   parseMeasurement,
+  parseSleep,
   readings,
+  rollingSleep,
+  sleepInputText,
+  sleepLogs,
   type Measurements,
   type MetricKey,
 } from '../health/health';
@@ -31,19 +39,19 @@ function useNumber() {
   );
 }
 
-/** What can be charted: each single measurement, plus blood pressure as a pair. */
-type ChartKey = Exclude<MetricKey, 'systolic' | 'diastolic'> | 'pressure';
+/** What gets its own chart: each single measurement, plus blood pressure as a pair. Sleep is charted from the nightly log. */
+type ChartKey = Exclude<MetricKey, 'systolic' | 'diastolic' | 'sleepHours'> | 'pressure';
 const CHARTS: { key: ChartKey; label: string }[] = [
   { key: 'weight', label: 'Weight' },
-  { key: 'restingBpm', label: 'Heart rate' },
+  { key: 'restingBpm', label: 'Resting heart rate' },
   { key: 'pressure', label: 'Blood pressure' },
   { key: 'bodyFat', label: 'Body fat' },
   { key: 'waist', label: 'Waist' },
-  { key: 'sleepHours', label: 'Sleep' },
 ];
 
-type Range = '3m' | '6m' | '1y' | 'all';
+type Range = '1m' | '3m' | '6m' | '1y' | 'all';
 const RANGES: { value: Range; label: string; days: number | null }[] = [
+  { value: '1m', label: '1 month', days: 31 },
   { value: '3m', label: '3 months', days: 92 },
   { value: '6m', label: '6 months', days: 183 },
   { value: '1y', label: '1 year', days: 366 },
@@ -53,13 +61,15 @@ const RANGES: { value: Range; label: string; days: number | null }[] = [
 /** The fields shown as tiles and in the form, in order. Blood pressure is handled as a pair between them. */
 const SINGLE: Exclude<MetricKey, 'systolic' | 'diastolic'>[] = ['weight', 'restingBpm', 'bodyFat', 'waist', 'sleepHours'];
 
+const tile = 'rounded-lg border border-edge/70 bg-void/40 p-3';
+
 export function Health() {
   const data = useGame((s) => s.data);
   const today = useToday();
   const num = useNumber();
   const entries = useMemo(() => checkIns(data), [data]);
+  const nights = useMemo(() => sleepLogs(data), [data]);
   const [form, setForm] = useState<{ entry?: HealthEntry } | null>(null);
-  const [chart, setChart] = useState<ChartKey>('weight');
   const [range, setRange] = useState<Range>('6m');
 
   const doneThisWeek = checkedInThisWeek(data, today);
@@ -72,21 +82,55 @@ export function Health() {
   }, [entries]);
   const weight = latest(entries, 'weight');
   const profile = data.healthProfile;
+  const weekSleep = averageSleep(nights, today);
 
-  const series = useMemo((): ChartSeries[] => {
+  // One chart per measurement that has anything in the chosen period.
+  const charts = useMemo(() => {
     const days = RANGES.find((r) => r.value === range)!.days;
     const from = days === null ? '' : addDays(today, -days);
     const inRange = entries.filter((e) => e.date >= from);
-    if (chart === 'pressure') {
-      return [
-        { name: 'Systolic', color: CHART_COLORS[0], points: readings(inRange, 'systolic') },
-        { name: 'Diastolic', color: CHART_COLORS[1], points: readings(inRange, 'diastolic') },
-      ];
+    const list: { key: string; label: string; unit: string; decimals: number; series: ChartSeries[]; sleep?: boolean }[] = [];
+
+    for (const c of CHARTS) {
+      const metric = c.key === 'pressure' ? METRICS.systolic : METRICS[c.key];
+      const series: ChartSeries[] =
+        c.key === 'pressure'
+          ? [
+              { name: 'Systolic', color: CHART_COLORS[0], points: readings(inRange, 'systolic') },
+              { name: 'Diastolic', color: CHART_COLORS[1], points: readings(inRange, 'diastolic') },
+            ]
+          : [{ name: c.label, color: CHART_COLORS[0], points: readings(inRange, c.key) }];
+      if (series.some((s) => s.points.length > 0)) {
+        list.push({ key: c.key, label: c.label, unit: metric.unit, decimals: metric.decimals, series });
+      }
     }
-    return [{ name: METRICS[chart].name, color: CHART_COLORS[0], points: readings(inRange, chart) }];
-  }, [entries, chart, range, today]);
-  const chartMetric = chart === 'pressure' ? METRICS.systolic : METRICS[chart];
-  const chartHasData = series.some((s) => s.points.length > 0);
+
+    const loggedNights = nights.filter((n) => n.date >= from);
+    if (loggedNights.length > 0) {
+      const series: ChartSeries[] = [
+        { name: 'Each night', color: CHART_COLORS[0], points: loggedNights.map((n) => ({ date: n.date, value: n.hours })) },
+      ];
+      // The weekly average only says something once there are a few nights to average.
+      if (loggedNights.length >= 4) {
+        series.push({ name: '7-night average', color: CHART_COLORS[1], points: rollingSleep(nights).filter((p) => p.date >= from) });
+      }
+      list.push({ key: 'sleep', label: 'Sleep', unit: 'hours', decimals: 1, series, sleep: true });
+    } else {
+      const weekly = readings(inRange, 'sleepHours');
+      if (weekly.length > 0) {
+        list.push({
+          key: 'sleep',
+          label: 'Sleep (weekly average)',
+          unit: 'hours',
+          decimals: 1,
+          series: [{ name: 'Sleep', color: CHART_COLORS[0], points: weekly }],
+          sleep: true,
+        });
+      }
+    }
+    return list;
+  }, [entries, nights, range, today]);
+  const anyData = entries.length > 0 || nights.length > 0;
 
   const delta = (last: number, previous: number | undefined, decimals: number, since: string | undefined) => {
     if (previous === undefined || !since) return 'first reading';
@@ -96,31 +140,34 @@ export function Health() {
   };
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-2">
-      <div className="flex items-center justify-between lg:col-span-2">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold">Health</h1>
         <Button variant="gold" onClick={openCheckIn}>
           <Plus size={16} /> Check in
         </Button>
       </div>
 
-      <Panel title="This week">
-        <p className="text-sm">
-          {doneThisWeek
-            ? `Done. You checked in on ${formatLong(lastEntry.date)}.`
-            : lastEntry
-              ? `No check-in yet this week. The last one was ${daysBetween(lastEntry.date, today)} days ago.`
-              : 'Record your weight, resting heart rate, blood pressure and anything else you measure. Once a week is plenty.'}
-        </p>
-        <p className="mt-1.5 text-xs text-mute">
-          The first check-in of each week earns +{HEALTH_REWARD.xp} Vitality XP and +{HEALTH_REWARD.gold} gold. This
-          page only records what you enter; it is not medical advice.
-        </p>
-      </Panel>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Panel title="This week">
+          <p className="text-sm">
+            {doneThisWeek
+              ? `Done. You checked in on ${formatLong(lastEntry.date)}.`
+              : lastEntry
+                ? `No check-in yet this week. The last one was ${daysBetween(lastEntry.date, today)} days ago.`
+                : 'Record your weight, resting heart rate, blood pressure and anything else you measure. Once a week is plenty.'}
+          </p>
+          <p className="mt-1.5 text-xs text-mute">
+            The first check-in of each week earns +{HEALTH_REWARD.xp} Vitality XP and +{HEALTH_REWARD.gold} gold. This
+            page only records what you enter; it is not medical advice.
+          </p>
+        </Panel>
+        <SleepPanel />
+      </div>
 
-      {entries.length > 0 && (
+      {(entries.length > 0 || weekSleep !== null) && (
         <Panel title="Latest">
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {SINGLE.slice(0, 2).map((key) => (
               <Tile key={key} metric={key} entries={entries} num={num} delta={delta}>
                 {key === 'weight' && weight.last && profile?.goalWeight != null && (
@@ -133,7 +180,7 @@ export function Health() {
               </Tile>
             ))}
             {pressure.last && (
-              <div className="rounded-lg border border-edge/70 bg-void/40 p-3">
+              <div className={tile}>
                 <dt className="text-[11px] text-mute">Blood pressure</dt>
                 <dd className="mt-0.5 font-display text-2xl font-bold tabular-nums">
                   {pressure.last.systolic}/{pressure.last.diastolic}
@@ -147,7 +194,7 @@ export function Health() {
               </div>
             )}
             {weight.last && profile?.heightCm != null && (
-              <div className="rounded-lg border border-edge/70 bg-void/40 p-3">
+              <div className={tile}>
                 <dt className="text-[11px] text-mute">BMI</dt>
                 <dd className="mt-0.5 font-display text-2xl font-bold tabular-nums">
                   {num(bmi(weight.last.value, profile.heightCm), 1)}
@@ -155,87 +202,188 @@ export function Health() {
                 <dd className="mt-0.5 text-[11px] text-mute">from weight and height</dd>
               </div>
             )}
-            {SINGLE.slice(2).map((key) => (
+            {SINGLE.slice(2, 4).map((key) => (
               <Tile key={key} metric={key} entries={entries} num={num} delta={delta} />
             ))}
+            {weekSleep !== null ? (
+              <div className={tile}>
+                <dt className="text-[11px] text-mute">Sleep, last 7 nights</dt>
+                <dd className="mt-0.5 font-display text-2xl font-bold tabular-nums">{formatSleep(weekSleep)}</dd>
+                <dd className="mt-0.5 text-[11px] text-mute">average of the nights you logged</dd>
+              </div>
+            ) : (
+              <Tile metric="sleepHours" entries={entries} num={num} delta={delta} />
+            )}
           </dl>
         </Panel>
       )}
 
-      {entries.length > 0 && (
-        <Panel title="Trend" className="lg:col-start-2 lg:row-span-2 lg:row-start-2">
-          <div className="mb-3 flex flex-wrap gap-2">
-            <select
-              className={`${inputClass} w-auto min-w-40 flex-1`}
-              value={chart}
-              onChange={(e) => setChart(e.target.value as ChartKey)}
-              aria-label="Measurement to chart"
-            >
-              {CHARTS.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <div className="min-w-64 flex-[2]">
+      {anyData && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-bold">Trends</h2>
+            <div className="min-w-72 max-w-xl flex-1">
               <Segmented<Range> label="Time range" value={range} onChange={setRange} options={RANGES} />
             </div>
           </div>
-          {chartHasData ? (
-            <>
-              <p className="mb-1 text-xs text-mute">
-                {CHARTS.find((c) => c.key === chart)!.label}, in {chartMetric.unit}
-              </p>
-              <LineChart
-                series={series}
-                unit={chartMetric.unit}
-                decimals={chartMetric.decimals}
-                format={(v) => num(v, Number.isInteger(v) ? 0 : chartMetric.decimals)}
-                label={`${CHARTS.find((c) => c.key === chart)!.label} over time`}
-              />
-            </>
+          {charts.length === 0 ? (
+            <Panel>
+              <Empty>Nothing recorded in this period.</Empty>
+            </Panel>
           ) : (
-            <Empty>Nothing recorded for this in the chosen period.</Empty>
+            <div className="grid items-start gap-4 md:grid-cols-2 3xl:grid-cols-3">
+              {charts.map((c) => (
+                <Panel key={c.key} title={c.label} right={<span className="text-xs text-mute">{c.unit}</span>}>
+                  <LineChart
+                    series={c.series}
+                    unit={c.sleep ? '' : c.unit}
+                    decimals={c.decimals}
+                    format={(v) => num(v, Number.isInteger(v) ? 0 : c.decimals)}
+                    formatValue={c.sleep ? formatSleep : (v) => num(v, c.decimals)}
+                    height={210}
+                    label={`${c.label} over time`}
+                  />
+                </Panel>
+              ))}
+            </div>
           )}
-        </Panel>
+        </section>
       )}
 
-      {entries.length > 0 && (
-        <Panel title="Check-ins" right={<span className="text-xs text-mute">{entries.length}</span>}>
-          <ul className="space-y-1">
-            {[...entries].reverse().map((e) => {
-              const parts = [
-                e.weight !== null && `${num(e.weight, 1)} kg`,
-                e.restingBpm !== null && `${e.restingBpm} bpm`,
-                e.systolic !== null && e.diastolic !== null && `${e.systolic}/${e.diastolic}`,
-                e.bodyFat !== null && `${num(e.bodyFat, 1)}% fat`,
-                e.waist !== null && `${num(e.waist, 1)} cm waist`,
-                e.sleepHours !== null && `${num(e.sleepHours, 1)} h sleep`,
-              ].filter(Boolean);
-              return (
-                <li key={e.id}>
-                  <button
-                    type="button"
-                    onClick={() => setForm({ entry: e })}
-                    className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raise"
-                  >
-                    <span className="w-28 shrink-0 text-sm font-medium">{formatShort(e.date)}</span>
-                    <span className="min-w-0 flex-1 text-sm text-mute tabular-nums">
-                      {parts.join(' · ')}
-                      {e.note && <span className="block truncate text-xs">{e.note}</span>}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </Panel>
-      )}
-
-      <ProfilePanel />
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        {entries.length > 0 && (
+          <Panel title="Check-ins" right={<span className="text-xs text-mute">{entries.length}</span>}>
+            <ul className="max-h-96 space-y-1 overflow-y-auto">
+              {[...entries].reverse().map((e) => {
+                const parts = [
+                  e.weight !== null && `${num(e.weight, 1)} kg`,
+                  e.restingBpm !== null && `${e.restingBpm} bpm`,
+                  e.systolic !== null && e.diastolic !== null && `${e.systolic}/${e.diastolic}`,
+                  e.bodyFat !== null && `${num(e.bodyFat, 1)}% fat`,
+                  e.waist !== null && `${num(e.waist, 1)} cm waist`,
+                  e.sleepHours !== null && `${num(e.sleepHours, 1)} h sleep`,
+                ].filter(Boolean);
+                return (
+                  <li key={e.id}>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ entry: e })}
+                      className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raise"
+                    >
+                      <span className="w-28 shrink-0 text-sm font-medium">{formatShort(e.date)}</span>
+                      <span className="min-w-0 flex-1 text-sm text-mute tabular-nums">
+                        {parts.join(' · ')}
+                        {e.note && <span className="block truncate text-xs">{e.note}</span>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+        )}
+        <ProfilePanel />
+      </div>
 
       {form && <CheckInForm entry={form.entry} onClose={() => setForm(null)} />}
     </div>
+  );
+}
+
+/** Log a night's sleep, and see the last week at a glance. */
+function SleepPanel() {
+  const data = useGame((s) => s.data);
+  const saveSleep = useGame((s) => s.saveSleep);
+  const deleteSleep = useGame((s) => s.deleteSleep);
+  const today = useToday();
+  const nights = useMemo(() => sleepLogs(data), [data]);
+  const byDate = useMemo(() => new Map(nights.map((n) => [n.date, n])), [nights]);
+
+  const [date, setDate] = useState(today);
+  const [text, setText] = useState(() => (byDate.get(today) ? sleepInputText(byDate.get(today)!.hours) : ''));
+  const pick = (d: string) => {
+    setDate(d);
+    const log = byDate.get(d);
+    setText(log ? sleepInputText(log.hours) : '');
+  };
+
+  const hours = parseSleep(text);
+  const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today;
+  const existing = byDate.get(date);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  const average = averageSleep(nights, today);
+
+  return (
+    <Panel title="Sleep" right={average !== null ? <span className="text-xs text-mute">7-night average {formatSleep(average)}</span> : undefined}>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (hours !== null && dateOk) saveSleep(date, hours);
+        }}
+      >
+        <Field label="Morning you woke up">
+          <input type="date" className={`${inputBase} w-40`} value={date} max={today} onChange={(e) => pick(e.target.value)} />
+        </Field>
+        <Field label="Slept for">
+          <input
+            className={`${inputBase} w-28 ${text.trim() !== '' && hours === null ? 'border-danger' : ''}`}
+            inputMode="decimal"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="7:30"
+            aria-label="Hours slept"
+          />
+        </Field>
+        <Button variant="primary" type="submit" disabled={hours === null || !dateOk || existing?.hours === hours}>
+          {existing ? 'Update' : 'Log'}
+        </Button>
+        {existing && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              deleteSleep(date);
+              setText('');
+            }}
+          >
+            Remove
+          </Button>
+        )}
+      </form>
+
+      <ul className="mt-4 grid grid-cols-7 gap-1.5">
+        {week.map((d) => {
+          const log = byDate.get(d);
+          const selected = d === date;
+          return (
+            <li key={d}>
+              <button
+                type="button"
+                onClick={() => pick(d)}
+                aria-pressed={selected}
+                title={log ? `${formatLong(d)}: ${formatSleep(log.hours)}` : `${formatLong(d)}: not logged`}
+                className={`flex w-full flex-col items-center gap-1 rounded-lg border px-1 py-1.5 text-[11px] transition-colors ${
+                  selected ? 'border-glow bg-glow/10' : 'border-edge/60 hover:border-mute'
+                }`}
+              >
+                <span className="text-mute">{d === today ? 'Today' : WEEKDAY_LABELS[weekday(d)]}</span>
+                <span className="flex h-12 w-2.5 items-end overflow-hidden rounded-full bg-void/80">
+                  <span
+                    className="w-full rounded-full transition-[height] duration-500"
+                    style={{ height: `${log ? Math.min(100, (log.hours / 10) * 100) : 0}%`, background: CHART_COLORS[0] }}
+                  />
+                </span>
+                <span className={`tabular-nums ${log ? 'font-semibold' : 'text-mute'}`}>{log ? sleepInputText(log.hours) : '–'}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-3 text-xs text-mute">
+        Type it as 7:30, 7h30 or 7,5. Logging last night earns +{SLEEP_REWARD.xp} Vitality XP and +{SLEEP_REWARD.gold}{' '}
+        gold; tap a day to fill in or correct an earlier night.
+      </p>
+    </Panel>
   );
 }
 
@@ -256,7 +404,7 @@ function Tile({
   const { last, previous } = latest(entries, metric);
   if (!last) return null;
   return (
-    <div className="rounded-lg border border-edge/70 bg-void/40 p-3">
+    <div className={tile}>
       <dt className="text-[11px] text-mute">{m.name}</dt>
       <dd className="mt-0.5 font-display text-2xl font-bold tabular-nums">
         {num(last.value, m.decimals)}
@@ -291,10 +439,10 @@ function ProfilePanel() {
         }}
       >
         <Field label="Height (cm)">
-          <input className={`${inputClass} w-28`} inputMode="numeric" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="e.g. 178" />
+          <input className={`${inputBase} w-28`} inputMode="numeric" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="e.g. 178" />
         </Field>
         <Field label="Goal weight (kg), optional">
-          <input className={`${inputClass} w-28`} inputMode="decimal" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. 75" />
+          <input className={`${inputBase} w-28`} inputMode="decimal" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. 75" />
         </Field>
         <Button type="submit" disabled={!changed}>
           Save

@@ -12,6 +12,8 @@ import { decodeBankFile, parseOfx } from './ofx';
 import { groupLines } from './pdfLines';
 import { planImport } from './statement';
 import { nextCharge, subscriptionTotals, upcomingCharges } from './subscriptions';
+import { balanceSeries, categoryByMonth, categoryTotals, firstMonthWithEntries, lastMonths, monthlyFlows } from './trends';
+import { daysBetween as daysBetweenDates } from '../game/dates';
 
 const TODAY = '2026-11-20';
 
@@ -575,6 +577,53 @@ describe('saving and merging', () => {
     expect(parseSave(old)).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 2, money: null, transactions: {} }))).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 3, subscriptions: {} }))).toEqual(emptySave());
-    expect(() => parseSave(JSON.stringify({ version: 5 }))).toThrow(/newer version/);
+    expect(parseSave(JSON.stringify({ version: 4, health: {} }))).toEqual(emptySave());
+    expect(() => parseSave(JSON.stringify({ version: 6 }))).toThrow(/newer version/);
+  });
+});
+
+describe('money trends', () => {
+  it('follows the balance day by day from the opening date', () => {
+    let d = start(100000); // opens on 2026-11-20
+    d = add(d, { date: '2026-11-21', amount: 2500 }, '2026-11-23');
+    d = add(d, { date: '2026-11-23', kind: 'income', amount: 10000, category: 'salary' }, '2026-11-23', 11);
+    d = add(d, { date: '2026-11-10', amount: 99900 }, '2026-11-23', 12); // before the opening date: not in the balance
+    expect(balanceSeries(d, '2026-11-01', '2026-11-23')).toEqual([
+      { date: '2026-11-20', amount: 100000 },
+      { date: '2026-11-21', amount: 97500 },
+      { date: '2026-11-22', amount: 97500 },
+      { date: '2026-11-23', amount: 107500 },
+    ]);
+    // A window that starts later begins from the balance already reached.
+    expect(balanceSeries(d, '2026-11-22', '2026-11-23')[0]).toEqual({ date: '2026-11-22', amount: 97500 });
+    expect(balanceSeries(emptySave(), '2026-11-01', '2026-11-23')).toEqual([]);
+  });
+
+  it('thins a long balance history to weekly points but keeps today', () => {
+    const d = start(100000);
+    const series = balanceSeries(d, '2026-11-20', '2028-06-30');
+    expect(series.length).toBeLessThan(100);
+    expect(series[series.length - 1].date).toBe('2028-06-30');
+    expect(daysBetweenDates(series[0].date, series[1].date)).toBe(7);
+  });
+
+  it('adds up each month, including months from before the opening date', () => {
+    let d = start();
+    d = add(d, { date: '2026-09-10', amount: 30000, category: 'games' });
+    d = add(d, { date: '2026-10-05', amount: 20000, category: 'groceries' });
+    d = add(d, { date: '2026-10-28', kind: 'income', amount: 500000, category: 'salary' });
+    d = add(d, { date: '2026-11-20', amount: 4000, category: 'games' });
+    d = add(d, { date: '2026-11-20', amount: 100000, category: 'debt' });
+    const months = lastMonths(TODAY, 3);
+    expect(months).toEqual(['2026-09', '2026-10', '2026-11']);
+    expect(monthlyFlows(d, months)).toEqual([
+      { month: '2026-09', income: 0, out: 30000, spent: 30000 },
+      { month: '2026-10', income: 500000, out: 20000, spent: 20000 },
+      { month: '2026-11', income: 0, out: 104000, spent: 4000 },
+    ]);
+    expect(categoryByMonth(d, 'games', months)).toEqual([30000, 0, 4000]);
+    expect(categoryTotals(d, months).map((c) => c.category)).toEqual(['debt', 'games', 'groceries']);
+    expect(firstMonthWithEntries(d)).toBe('2026-09');
+    expect(firstMonthWithEntries(start())).toBeNull();
   });
 });

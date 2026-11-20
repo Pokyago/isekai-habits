@@ -97,3 +97,23 @@ export function formatMonth(month: MonthStr): string {
   const [y, m] = month.split('-').map(Number);
   return new Date(y, m - 1, 1, 12).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
+
+const wholeFormatters = new Map<string, Intl.NumberFormat>();
+
+/** Cents to text without the cents, for chart axes: 1234567 → "R$ 12.346". */
+export function formatWhole(cents: number, currency: string): string {
+  let f = wholeFormatters.get(currency);
+  if (!f) {
+    const code = CURRENCIES[currency] ? currency : DEFAULT_CURRENCY;
+    f = new Intl.NumberFormat(info(currency).locale, { style: 'currency', currency: code, maximumFractionDigits: 0 });
+    wholeFormatters.set(currency, f);
+  }
+  return f.format(Math.round(cents / 100));
+}
+
+/** A short month name for a chart axis; January also carries the year: "Nov", "Jan 27". */
+export function formatMonthShort(month: MonthStr): string {
+  const [y, m] = month.split('-').map(Number);
+  const name = new Date(y, m - 1, 1, 12).toLocaleDateString(undefined, { month: 'short' });
+  return m === 1 ? `${name} ${String(y).slice(2)}` : name;
+}

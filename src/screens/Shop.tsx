@@ -1,6 +1,6 @@
 import { Coins, Pencil, Plus, Shield, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Empty, Field, IconButton, Modal, Panel, inputClass } from '../components/ui';
+import { Button, Empty, Field, IconButton, Modal, Panel, inputBase, inputClass } from '../components/ui';
 import { SHIELD_COST } from '../data/meta';
 import { useGame } from '../data/store';
 import type { Reward } from '../data/types';
@@ -134,7 +134,7 @@ function RewardForm({ reward, onClose }: { reward?: Reward; onClose(): void }) {
             type="number"
             min={1}
             max={100000}
-            className={`${inputClass} w-32`}
+            className={`${inputBase} w-32`}
             value={cost}
             onChange={(e) => setCost(Math.max(0, Math.round(Number(e.target.value) || 0)))}
           />

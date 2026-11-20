@@ -14,8 +14,16 @@ import {
   latest,
   parseMeasurement,
   readings,
+  averageSleep,
+  deleteSleep,
+  formatSleep,
+  parseSleep,
+  rollingSleep,
   saveCheckIn,
   saveHealthProfile,
+  saveSleep,
+  sleepInputText,
+  sleepLogs,
   type CheckInInput,
 } from './health';
 
@@ -117,6 +125,51 @@ describe('health check-ins', () => {
     expect(checkIns(merged).length).toBe(2);
     expect(derive(merged, FRI).heroXp).toBe(20); // one reward for the week, not two
     expect(sameSave(parseSave(serializeSave(merged)), merged)).toBe(true);
+  });
+});
+
+describe('nightly sleep log', () => {
+  it('reads sleep typed as a decimal or as hours and minutes', () => {
+    expect(parseSleep('7,5')).toBe(7.5);
+    expect(parseSleep('7.25')).toBe(7.25);
+    expect(parseSleep('7:30')).toBe(7.5);
+    expect(parseSleep('7h30')).toBe(7.5);
+    expect(parseSleep('8h')).toBe(8);
+    expect(parseSleep(' 6 h 45 min ')).toBe(6.75);
+    expect(parseSleep('')).toBeNull();
+    expect(parseSleep('25')).toBeNull();
+    expect(parseSleep('7:75')).toBeNull();
+    expect(parseSleep('lots')).toBeNull();
+    expect(formatSleep(7.5)).toBe('7 h 30 min');
+    expect(formatSleep(8)).toBe('8 h');
+    expect(sleepInputText(6.75)).toBe('6:45');
+  });
+
+  it('keeps one entry per night and rewards logging last night once', () => {
+    let d = saveSleep(emptySave(), FRI, 7.5, FRI, 10);
+    d = saveSleep(d, FRI, 8, FRI, 11); // corrected: replaces, no second reward
+    d = saveSleep(d, '2026-11-19', 6, FRI, 12); // an older night: recorded, no reward
+    expect(sleepLogs(d).map((l) => [l.date, l.hours])).toEqual([
+      ['2026-11-19', 6],
+      [FRI, 8],
+    ]);
+    expect(derive(d, FRI)).toMatchObject({ heroXp: 3, gold: 2 });
+    expect(derive(d, FRI).stats.vit.total).toBe(3);
+    expect(saveSleep(d, '2026-11-21', 7, FRI, 13)).toBe(d); // not in the future
+    expect(sleepLogs(deleteSleep(d, FRI, 20)).length).toBe(1);
+  });
+
+  it('averages the last seven nights, skipping nights that were not logged', () => {
+    let d = emptySave();
+    const nights: [string, number][] = [['2026-11-10', 5], ['2026-11-14', 6], ['2026-11-17', 7], ['2026-11-20', 8]];
+    nights.forEach(([date, hours], i) => {
+      d = saveSleep(d, date, hours, FRI, 10 + i);
+    });
+    const logs = sleepLogs(d);
+    expect(averageSleep(logs, FRI)).toBe(7); // 14, 17 and 20 November
+    expect(averageSleep(logs, '2026-11-12')).toBe(5);
+    expect(averageSleep(logs, '2026-11-01')).toBeNull();
+    expect(rollingSleep(logs).map((r) => r.value)).toEqual([5, 5.5, 6.5, 7]);
   });
 });
 

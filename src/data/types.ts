@@ -117,6 +117,15 @@ export interface HealthEntry {
   updatedAt: number;
 }
 
+/** How long you slept on one night. The date is the morning you woke up; there is one entry per date. */
+export interface SleepLog {
+  id: string;
+  date: DateStr;
+  hours: number;
+  deleted: boolean;
+  updatedAt: number;
+}
+
 export interface HealthProfile {
   heightCm: number | null;
   goalWeight: number | null;
@@ -228,12 +237,12 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 4;
+  version: 5;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
   quests: Record<string, Quest>;
-  /** Rewards already given: daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) and weekly health check-ins (`health|monday`). */
+  /** Rewards already given: daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) weekly health check-ins (`health|monday`) and nightly sleep logs (`sleep|date`). */
   claims: Record<string, QuestClaim>;
   rewards: Record<string, Reward>;
   purchases: Record<string, Purchase>;
@@ -244,5 +253,6 @@ export interface SaveData {
   goals: Record<string, Goal>;
   debts: Record<string, Debt>;
   health: Record<string, HealthEntry>;
+  sleep: Record<string, SleepLog>;
   healthProfile: HealthProfile | null;
 }

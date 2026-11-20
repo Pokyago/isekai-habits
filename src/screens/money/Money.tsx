@@ -11,11 +11,12 @@ import { categoryName } from '../../money/categories';
 import { CURRENCIES, DEFAULT_CURRENCY, formatMonth, monthOf, parseAmount } from '../../money/format';
 import { subscriptionTotals, upcomingCharges } from '../../money/subscriptions';
 import { AmountInput, BalanceForm, BudgetForm, Stats, TransactionForm, useMoney } from './forms';
+import { Charts } from './Charts';
 import { DebtList, GoalList, Plans } from './Plans';
 import { Subscriptions, inDays } from './Subscriptions';
 import { Transactions, TxRow } from './Transactions';
 
-type View = 'overview' | 'entries' | 'plans' | 'subs';
+type View = 'overview' | 'entries' | 'charts' | 'plans' | 'subs';
 
 export function Money() {
   const hasMoney = useGame((s) => s.data.money !== null);
@@ -36,7 +37,7 @@ export function Money() {
           <Plus size={16} /> Add entry
         </Button>
       </div>
-      <div className="max-w-2xl">
+      <div className="max-w-3xl">
       <Segmented<View>
         label="Money section"
         value={view}
@@ -44,6 +45,7 @@ export function Money() {
         options={[
           { value: 'overview', label: 'Overview' },
           { value: 'entries', label: 'Entries' },
+          { value: 'charts', label: 'Charts' },
           { value: 'plans', label: 'Debts & goals' },
           { value: 'subs', label: 'Subscriptions' },
         ]}
@@ -54,6 +56,7 @@ export function Money() {
         <Overview onAdd={add} onEdit={edit} onSeeAll={() => setView('entries')} onSeeSubs={() => setView('subs')} />
       )}
       {view === 'entries' && <Transactions onEdit={edit} />}
+      {view === 'charts' && <Charts />}
       {view === 'plans' && <Plans onAdd={add} />}
       {view === 'subs' && <Subscriptions />}
 

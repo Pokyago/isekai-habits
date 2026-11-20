@@ -16,7 +16,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-edge bg-panel/85 shadow-[0_0_28px_rgba(111,214,255,0.05)] backdrop-blur-sm ${className}`}
+      className={`min-w-0 rounded-xl border border-edge bg-panel/85 shadow-[0_0_28px_rgba(111,214,255,0.05)] backdrop-blur-sm ${className}`}
     >
       {title && (
         <header className="flex min-h-11 items-center justify-between gap-3 border-b border-edge/70 px-4 py-2">
@@ -172,8 +172,12 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export const inputClass =
-  'min-h-10 w-full rounded-lg border border-edge bg-void/70 px-3 text-sm text-ink placeholder:text-mute/60 focus:border-glow focus:outline-none';
+/** The look of a text box or dropdown, without a width: add your own (w-28, flex-1, …). */
+export const inputBase =
+  'min-h-10 rounded-lg border border-edge bg-void/70 px-3 text-sm text-ink placeholder:text-mute/60 focus:border-glow focus:outline-none';
+
+/** A full-width text box or dropdown. */
+export const inputClass = `${inputBase} w-full`;
 
 /** A row of mutually exclusive choices. */
 export function Segmented<T extends string>({

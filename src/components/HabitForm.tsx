@@ -5,7 +5,7 @@ import { categoryOf } from '../data/templates';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, WEEKDAY_DISPLAY_ORDER, WEEKDAY_LABELS, statColor } from '../data/meta';
 import type { Difficulty, Habit, StatKey } from '../data/types';
 import { BASE_XP } from '../game/xp';
-import { Button, Field, Modal, Segmented, StatIcon, inputClass } from './ui';
+import { Button, Field, Modal, Segmented, StatIcon, inputBase, inputClass } from './ui';
 
 export function HabitForm({
   habit,
@@ -172,7 +172,7 @@ export function HabitForm({
                 min={1}
                 max={7}
                 aria-label="Times per week"
-                className={`${inputClass} w-20`}
+                className={`${inputBase} w-20`}
                 value={times}
                 onChange={(e) => setTimes(Math.min(7, Math.max(1, Number(e.target.value) || 1)))}
               />
@@ -186,7 +186,7 @@ export function HabitForm({
             type="number"
             min={1}
             max={99}
-            className={`${inputClass} w-24`}
+            className={`${inputBase} w-24`}
             value={target}
             onChange={(e) => setTarget(Math.min(99, Math.max(1, Number(e.target.value) || 1)))}
           />

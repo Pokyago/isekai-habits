@@ -5,7 +5,7 @@ import { Button, Modal, Panel, inputClass } from '../components/ui';
 import { useFx } from '../data/fx';
 import { SHIELD_COST } from '../data/meta';
 import { useGame } from '../data/store';
-import { HEALTH_REWARD } from '../health/health';
+import { HEALTH_REWARD, SLEEP_REWARD } from '../health/health';
 import { useToday } from '../hooks';
 import { BUDGET_GRACE_DAYS, BUDGET_REWARD, LEDGER_REWARD, MILESTONE_REWARD } from '../money/actions';
 import { disconnectSaveFile, downloadBackup, retireSaveFile, syncMode } from '../sync';
@@ -62,8 +62,19 @@ export function Settings() {
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-mute">
           <li>Completing a habit gives XP to your hero and to the habit’s stat, plus gold worth half the XP.</li>
           <li>Trivial, Easy, Medium and Hard habits are worth 5, 10, 20 and 40 XP.</li>
-          <li>Streaks add a bonus that grows to +50% XP at 30 in a row. Your class adds 10% on its own stat.</li>
-          <li>Missing a scheduled day resets that habit’s streak. Nothing else is lost.</li>
+          <li>
+            Every habit has its own streak: how many of its scheduled days in a row you have done it. A habit set for
+            Monday, Wednesday and Friday keeps its streak through the days in between. A times-per-week habit counts
+            weeks in a row that reached its number.
+          </li>
+          <li>
+            A habit’s streak adds bonus XP to that habit only, growing evenly to +50% at 30 in a row. Your class adds 10%
+            on its own stat.
+          </li>
+          <li>
+            Missing a scheduled day resets that one habit’s streak; other habits are not affected and nothing else is
+            lost. Doing every scheduled habit in a day is a separate thing, a flawless day.
+          </li>
           <li>A streak shield ({SHIELD_COST} gold) is spent automatically to cover one missed day.</li>
           <li>Guild rank rises with level: E at 5, D at 10, C at 15, B at 20, A at 30, S at 40.</li>
           <li>
@@ -74,7 +85,8 @@ export function Settings() {
           </li>
           <li>
             Health: the first check-in of each week gives +{HEALTH_REWARD.xp} Vitality XP and +{HEALTH_REWARD.gold}{' '}
-            gold. Nothing depends on what the numbers are.
+            gold, and logging last night’s sleep gives +{SLEEP_REWARD.xp} XP and +{SLEEP_REWARD.gold} gold. Nothing depends on
+            what the numbers are.
           </li>
         </ul>
       </Panel>

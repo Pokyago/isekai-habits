@@ -58,6 +58,8 @@ interface GameState {
   saveCheckIn(input: CheckInInput): void;
   deleteCheckIn(id: string): void;
   saveHealthProfile(profile: { heightCm: number | null; goalWeight: number | null }): void;
+  saveSleep(date: DateStr, hours: number): void;
+  deleteSleep(date: DateStr): void;
 
   /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
   tick(): void;
@@ -224,6 +226,12 @@ export const useGame = create<GameState>((set, get) => {
     },
     saveHealthProfile(profile) {
       apply((d) => health.saveHealthProfile(d, profile, Date.now()));
+    },
+    saveSleep(date, hours) {
+      apply((d) => health.saveSleep(d, date, hours, todayStr(), Date.now()), true);
+    },
+    deleteSleep(date) {
+      apply((d) => health.deleteSleep(d, date, Date.now()));
     },
     tick() {
       applyMoney((d) => d);
