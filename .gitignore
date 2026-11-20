@@ -3,3 +3,11 @@ dist
 dev-dist
 *.local
 .DS_Store
+
+# Your save file, when it is kept next to the app instead of in iCloud Drive
+Data/
+
+# Build leftovers of the desktop window
+desktop/bin/
+desktop/obj/
+desktop/out/

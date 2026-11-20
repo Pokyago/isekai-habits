@@ -3,14 +3,18 @@ import { create } from 'zustand';
 import { mergeSaves, parseSave, sameSave, saveFingerprint, serializeSave } from '../data/merge';
 import { useGame } from '../data/store';
 import type { SaveData } from '../data/types';
+import { callHost, isDesktop } from './desktop';
 
 /*
- * Sync works on a single save file, meant to live in iCloud Drive.
+ * Sync works on a single save file, meant to live in iCloud Drive. There are three ways
+ * to reach it, depending on where the app runs:
  *
- * - Automatic (Chrome/Edge on a PC): the browser keeps a handle to the file and
- *   this module reads, merges and writes it on its own.
- * - Manual (Safari on iPad, and anything else): the user picks the file to load
- *   it, and shares/downloads it to save it back.
+ * - 'desktop' (Isekai Habits.exe): the window program reads and writes the file. It is
+ *   always connected; there is nothing to set up.
+ * - 'auto' (Chrome/Edge on a PC): the browser keeps a handle to a file the user picked
+ *   and this module reads, merges and writes it on its own.
+ * - 'manual' (Safari on iPad, and anything else): the user picks the file to load it,
+ *   and shares/downloads it to save it back.
  *
  * Every read is a merge, so a stale file or an iCloud conflict copy never loses data.
  */
@@ -32,14 +36,22 @@ interface PickerWindow {
   showOpenFilePicker?(options: unknown): Promise<SaveFileHandle[]>;
 }
 
-/** True where the browser can keep writing to a chosen file by itself. */
-export const canAutoSync =
-  typeof window !== 'undefined' && 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
+/** The save file, however it is reached. */
+interface SaveFile {
+  read(): Promise<string>;
+  write(text: string): Promise<void>;
+}
+
+const hasPickers = typeof window !== 'undefined' && 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
+
+export type SyncMode = 'desktop' | 'auto' | 'manual';
+export const syncMode: SyncMode = isDesktop ? 'desktop' : hasPickers ? 'auto' : 'manual';
 
 export type SyncStatus = 'off' | 'needs-permission' | 'syncing' | 'synced' | 'error';
 
 interface SyncState {
   status: SyncStatus;
+  /** File name in a browser; full path in the desktop app. */
   fileName: string | null;
   lastSyncedAt: number | null;
   error: string | null;
@@ -55,6 +67,7 @@ export const useSync = create<SyncState>(() => ({
   manualPrint: null,
 }));
 
+let file: SaveFile | null = null;
 let handle: SaveFileHandle | null = null;
 let running = false;
 let queued = false;
@@ -64,6 +77,25 @@ let started = false;
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function browserFile(h: SaveFileHandle): SaveFile {
+  return {
+    read: async () => (await h.getFile()).text(),
+    async write(text) {
+      const writable = await h.createWritable();
+      await writable.write(text);
+      await writable.close();
+    },
+  };
+}
+
+const desktopFile: SaveFile = {
+  read: async () => (await callHost('read')).text ?? '',
+  async write(text) {
+    await callHost('write', text);
+  },
+};
 
 async function hasPermission(h: SaveFileHandle, ask: boolean): Promise<boolean> {
   const options = { mode: 'readwrite' } as const;
@@ -73,7 +105,7 @@ async function hasPermission(h: SaveFileHandle, ask: boolean): Promise<boolean> 
 
 /** Read the file, merge it with this device, and write back whichever side is behind. */
 async function runSync(): Promise<void> {
-  if (!handle) return;
+  if (!file) return;
   if (running) {
     queued = true;
     return;
@@ -81,19 +113,14 @@ async function runSync(): Promise<void> {
   running = true;
   useSync.setState({ status: 'syncing', error: null });
   try {
-    const file = await handle.getFile();
     // If the file can't be read as a save this throws, and the file is left untouched.
-    const fileData = parseSave(await file.text());
+    const fileData = parseSave(await file.read());
     const local = useGame.getState().data;
     const merged = mergeSaves(local, fileData);
 
     lastSyncedPrint = saveFingerprint(merged);
     if (!sameSave(merged, local)) useGame.getState().replaceData(merged);
-    if (!sameSave(merged, fileData)) {
-      const writable = await handle.createWritable();
-      await writable.write(serializeSave(merged));
-      await writable.close();
-    }
+    if (!sameSave(merged, fileData)) await file.write(serializeSave(merged));
     useSync.setState({ status: 'synced', lastSyncedAt: Date.now() });
   } catch (err) {
     lastSyncedPrint = null;
@@ -112,11 +139,11 @@ async function runSync(): Promise<void> {
 
 function syncIfReady(): void {
   const { status } = useSync.getState();
-  if (handle && status !== 'needs-permission' && status !== 'off') void runSync();
+  if (file && status !== 'needs-permission' && status !== 'off') void runSync();
 }
 
 function scheduleSync(data: SaveData): void {
-  if (!handle || saveFingerprint(data) === lastSyncedPrint) return;
+  if (!file || saveFingerprint(data) === lastSyncedPrint) return;
   clearTimeout(timer);
   timer = setTimeout(syncIfReady, 1200);
 }
@@ -140,19 +167,31 @@ export async function initSync(): Promise<void> {
     if (document.visibilityState === 'visible') syncIfReady();
   });
 
-  if (!canAutoSync) return;
   try {
-    handle = (await idbGet<SaveFileHandle>(HANDLE_KEY)) ?? null;
-    if (!handle) return;
-    useSync.setState({ fileName: handle.name });
-    if (await hasPermission(handle, false)) await runSync();
-    else useSync.setState({ status: 'needs-permission' });
+    if (syncMode === 'desktop') {
+      const info = await callHost('info');
+      file = desktopFile;
+      useSync.setState({ fileName: info.path ?? SAVE_FILE_NAME, status: 'syncing' });
+      // The window program calls this just before it closes, so the last change reaches the file.
+      (window as unknown as { isekaiFlush?: () => void }).isekaiFlush = () => {
+        clearTimeout(timer);
+        void runSync();
+      };
+      await runSync();
+    } else if (syncMode === 'auto') {
+      handle = (await idbGet<SaveFileHandle>(HANDLE_KEY)) ?? null;
+      if (!handle) return;
+      file = browserFile(handle);
+      useSync.setState({ fileName: handle.name });
+      if (await hasPermission(handle, false)) await runSync();
+      else useSync.setState({ status: 'needs-permission' });
+    }
   } catch (err) {
     useSync.setState({ status: 'error', error: messageOf(err) });
   }
 }
 
-/** Ask the user for the save file: a new one to create, or an existing one to join. */
+/** Browser only. Ask the user for the save file: a new one to create, or an existing one to join. */
 export async function connectSaveFile(kind: 'new' | 'existing'): Promise<void> {
   const w = window as unknown as PickerWindow;
   const types = [{ description: 'Isekai Habits save', accept: { 'application/json': ['.json'] } }];
@@ -172,12 +211,13 @@ export async function connectSaveFile(kind: 'new' | 'existing'): Promise<void> {
     return;
   }
   handle = picked;
+  file = browserFile(picked);
   await idbSet(HANDLE_KEY, picked);
   useSync.setState({ fileName: picked.name, status: 'syncing' });
   await runSync();
 }
 
-/** Browsers forget file permission between visits; this asks again (needs a click). */
+/** Browser only. Browsers forget file permission between visits; this asks again (needs a click). */
 export async function reconnectSaveFile(): Promise<void> {
   if (!handle) return;
   try {
@@ -191,12 +231,46 @@ export async function syncNow(): Promise<void> {
   await runSync();
 }
 
+/** Browser only. */
 export async function disconnectSaveFile(): Promise<void> {
   handle = null;
+  file = null;
   lastSyncedPrint = null;
   clearTimeout(timer);
   await idbDel(HANDLE_KEY);
   useSync.setState({ status: 'off', fileName: null, lastSyncedAt: null, error: null });
+}
+
+/** Desktop only. Let the user move the save file somewhere else, or point at an existing one. */
+export async function chooseSaveLocation(): Promise<void> {
+  try {
+    const reply = await callHost('choose');
+    if (!reply.changed) return;
+    lastSyncedPrint = null;
+    useSync.setState({ fileName: reply.path ?? SAVE_FILE_NAME });
+    await runSync();
+  } catch (err) {
+    useSync.setState({ status: 'error', error: messageOf(err) });
+  }
+}
+
+/** Desktop only. Show the save file in File Explorer. */
+export function revealSaveFile(): void {
+  void callHost('reveal').catch(() => undefined);
+}
+
+/**
+ * Desktop only, for "erase everything": sets the save file aside under another name so
+ * the erased game isn't merged straight back in. Returns the new name, or null if
+ * there was no file. Reset the game right after this resolves.
+ */
+export async function retireSaveFile(): Promise<string | null> {
+  clearTimeout(timer);
+  queued = false;
+  while (running) await sleep(40);
+  const reply = await callHost('retire');
+  lastSyncedPrint = null;
+  return reply.text ?? null;
 }
 
 function markManualSynced(data: SaveData): void {
@@ -210,8 +284,8 @@ function markManualSynced(data: SaveData): void {
 }
 
 /** Manual sync, step 1: merge a chosen save file into this device. */
-export async function importSaveFile(file: File): Promise<void> {
-  const fileData = parseSave(await file.text());
+export async function importSaveFile(picked: File): Promise<void> {
+  const fileData = parseSave(await picked.text());
   const local = useGame.getState().data;
   const merged = mergeSaves(local, fileData);
   if (!sameSave(merged, local)) useGame.getState().replaceData(merged);
@@ -237,11 +311,11 @@ function download(text: string, name: string): void {
 export async function exportSaveFile(): Promise<'shared' | 'downloaded' | 'cancelled'> {
   const data = useGame.getState().data;
   const text = serializeSave(data);
-  const file = new File([text], SAVE_FILE_NAME, { type: 'application/json' });
+  const shareable = new File([text], SAVE_FILE_NAME, { type: 'application/json' });
 
-  if (!canAutoSync && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+  if (syncMode === 'manual' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [shareable] })) {
     try {
-      await navigator.share({ files: [file] });
+      await navigator.share({ files: [shareable] });
       markManualSynced(data);
       return 'shared';
     } catch (err) {

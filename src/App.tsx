@@ -23,7 +23,7 @@ import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
 import { Shop } from './screens/Shop';
 import { Today } from './screens/Today';
-import { canAutoSync, initSync, reconnectSaveFile, useSync } from './sync';
+import { initSync, reconnectSaveFile, syncMode, useSync } from './sync';
 
 type Tab = 'today' | 'hero' | 'habits' | 'shop' | 'chronicle' | 'settings';
 
@@ -121,7 +121,7 @@ function SyncNotice({ onOpenSettings }: { onOpenSettings(): void }) {
       return false;
     }
   });
-  if (!canAutoSync) return null;
+  if (syncMode === 'manual') return null;
 
   const box = 'mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2 text-sm';
 
@@ -140,12 +140,12 @@ function SyncNotice({ onOpenSettings }: { onOpenSettings(): void }) {
   if (status === 'error') {
     return (
       <div role="alert" className={`${box} border-danger/60 bg-danger/10`}>
-        <span className="min-w-48 flex-1">Syncing with your save file failed. Your progress is still saved on this PC.</span>
+        <span className="min-w-48 flex-1">Saving to your save file failed. Your progress is still kept on this PC.</span>
         <Button onClick={onOpenSettings}>See details</Button>
       </div>
     );
   }
-  if (status === 'off' && !hintDismissed) {
+  if (status === 'off' && syncMode === 'auto' && !hintDismissed) {
     return (
       <div role="status" className={`${box} border-edge bg-panel/85 text-mute`}>
         <span className="min-w-48 flex-1">
@@ -178,7 +178,8 @@ function Header({ onSettings, settingsOpen }: { onSettings(): void; settingsOpen
   const d = useDerived();
   const syncStatus = useSync((s) => s.status);
   const manualDirty = useManualDirty();
-  const needsAttention = canAutoSync ? syncStatus === 'needs-permission' || syncStatus === 'error' : manualDirty;
+  const needsAttention =
+    syncMode === 'manual' ? manualDirty : syncStatus === 'needs-permission' || syncStatus === 'error';
 
   return (
     <header className="flex items-center gap-3 py-3">

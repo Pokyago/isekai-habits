@@ -4,12 +4,14 @@ import { useFx } from '../data/fx';
 import { saveFingerprint } from '../data/merge';
 import { useGame } from '../data/store';
 import {
-  canAutoSync,
+  chooseSaveLocation,
   connectSaveFile,
   disconnectSaveFile,
   exportSaveFile,
   importSaveFile,
   reconnectSaveFile,
+  revealSaveFile,
+  syncMode,
   syncNow,
   useSync,
 } from '../sync';
@@ -157,6 +159,43 @@ function ManualSync() {
   );
 }
 
+/** Inside Isekai Habits.exe: the window program looks after the file, so there is nothing to connect. */
+function DesktopSync() {
+  const { status, fileName, lastSyncedAt, error } = useSync();
+  const inICloud = /icloud/i.test(fileName ?? '');
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-mute">
+        Your progress is saved to this file automatically
+        {inICloud
+          ? ', and iCloud Drive carries it to your other devices.'
+          : '. It is not in iCloud Drive, so it stays on this PC until you move it there.'}
+      </p>
+      <p className="rounded-lg border border-edge/70 bg-void/50 px-3 py-2 text-sm break-all">{fileName ?? '…'}</p>
+      {status === 'error' && <p className="text-sm text-danger">Saving failed: {error}</p>}
+      {status === 'synced' && lastSyncedAt && (
+        <p className="text-sm text-mute">
+          Up to date · last saved {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      )}
+      {status === 'syncing' && <p className="text-sm text-mute">Saving…</p>}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={() => void syncNow()} disabled={status === 'syncing'}>
+          <RefreshCw size={16} /> Sync now
+        </Button>
+        <Button onClick={revealSaveFile}>
+          <FolderOpen size={16} /> Show in folder
+        </Button>
+        <Button variant="ghost" onClick={() => void chooseSaveLocation()}>
+          Change location…
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function SyncPanel() {
-  return canAutoSync ? <AutoSync /> : <ManualSync />;
+  if (syncMode === 'desktop') return <DesktopSync />;
+  return syncMode === 'auto' ? <AutoSync /> : <ManualSync />;
 }

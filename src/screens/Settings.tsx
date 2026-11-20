@@ -2,15 +2,17 @@ import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { SyncPanel } from '../components/SyncPanel';
 import { Button, Modal, Panel, inputClass } from '../components/ui';
+import { useFx } from '../data/fx';
 import { SHIELD_COST } from '../data/meta';
 import { useGame } from '../data/store';
 import { useToday } from '../hooks';
-import { disconnectSaveFile, downloadBackup } from '../sync';
+import { disconnectSaveFile, downloadBackup, retireSaveFile, syncMode } from '../sync';
 
 export function Settings() {
   const hero = useGame((s) => s.data.hero);
   const renameHero = useGame((s) => s.renameHero);
   const resetAll = useGame((s) => s.resetAll);
+  const toast = useFx((s) => s.toast);
   const today = useToday();
   const [name, setName] = useState(hero?.name ?? '');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -19,14 +21,14 @@ export function Settings() {
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold">Settings</h1>
 
-      <Panel title="Sync with iCloud Drive">
+      <Panel title={syncMode === 'desktop' ? 'Save file' : 'Sync with iCloud Drive'}>
         <SyncPanel />
       </Panel>
 
       <Panel title="Backup">
         <p className="mb-3 text-sm text-mute">
-          Download a dated copy of your save for safekeeping. To restore one, load it as a save file; it is merged with
-          what you have.
+          Download a dated copy of your save for safekeeping.
+          {syncMode !== 'desktop' && ' To restore one, load it as a save file; it is merged with what you have.'}
         </p>
         <Button onClick={() => downloadBackup(today)}>
           <Download size={16} /> Download backup
@@ -74,14 +76,29 @@ export function Settings() {
 
       {confirmReset && (
         <Modal title="Erase everything" onClose={() => setConfirmReset(false)}>
-          <p className="text-sm">
-            This erases your hero, habits and history from <strong>this device</strong> and stops syncing. It can’t be
-            undone here.
-          </p>
-          <p className="mt-2 text-sm text-mute">
-            Your iCloud Drive save file is not touched. If you load it again, your progress comes back; delete that file
-            yourself if you want a completely fresh start.
-          </p>
+          {syncMode === 'desktop' ? (
+            <>
+              <p className="text-sm">
+                This erases your hero, habits and history from <strong>this PC</strong> and starts a new game.
+              </p>
+              <p className="mt-2 text-sm text-mute">
+                Your save file is not deleted: it is renamed (with “erased” and today’s date in its name) and left in
+                the same folder, so you can go back to it. Another device that still has the old game will bring it
+                back the next time it syncs to the same file.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm">
+                This erases your hero, habits and history from <strong>this device</strong> and stops syncing. It can’t
+                be undone here.
+              </p>
+              <p className="mt-2 text-sm text-mute">
+                Your iCloud Drive save file is not touched. If you load it again, your progress comes back; delete that
+                file yourself if you want a completely fresh start.
+              </p>
+            </>
+          )}
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setConfirmReset(false)}>
               Cancel
@@ -89,7 +106,8 @@ export function Settings() {
             <Button
               variant="danger"
               onClick={() => {
-                void disconnectSaveFile().then(resetAll);
+                const detach = syncMode === 'desktop' ? retireSaveFile() : disconnectSaveFile();
+                void detach.then(resetAll, (err) => toast(err instanceof Error ? err.message : String(err), 'warn'));
                 setConfirmReset(false);
               }}
             >
