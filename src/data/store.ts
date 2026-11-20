@@ -7,6 +7,9 @@ import * as actions from './actions';
 import type { HabitInput } from './actions';
 import { useFx } from './fx';
 import { emptySave, parseSave, serializeSave } from './merge';
+import * as money from '../money/actions';
+import type { DebtInput, GoalInput, RecurringInput, TxInput } from '../money/actions';
+import type { ImportRow } from '../money/ofx';
 import type { HabitTemplate } from './templates';
 import type { DateStr, Difficulty, HeroClass, SaveData, StatKey } from './types';
 
@@ -32,6 +35,22 @@ interface GameState {
   buyReward(id: string): void;
   buyShield(): void;
   resetAll(): void;
+
+  // Money
+  setupMoney(openingBalance: number, budget: number | null, currency: string): void;
+  updateMoney(patch: { budget?: number | null; currency?: string }): void;
+  saveTransaction(input: TxInput, id?: string): void;
+  deleteTransaction(id: string): void;
+  correctBalance(actual: number, date?: DateStr): void;
+  saveRecurring(input: RecurringInput, id?: string): void;
+  deleteRecurring(id: string): void;
+  saveGoal(input: GoalInput, id?: string): void;
+  deleteGoal(id: string): void;
+  saveDebt(input: DebtInput, id?: string): void;
+  deleteDebt(id: string): void;
+  importRows(rows: ImportRow[]): void;
+  /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
+  tick(): void;
 }
 
 /** Applies a change, then announces any XP, gold, stat levels or hero levels it earned. */
@@ -66,6 +85,9 @@ export const useGame = create<GameState>((set, get) => {
     set({ data: after });
     if (feedback) withFeedback(before, after);
   };
+  /** A money change, followed by anything it makes due (monthly items, rewards). */
+  const applyMoney = (fn: (data: SaveData) => SaveData) =>
+    apply((d) => money.housekeep(fn(d), todayStr(), Date.now()), true);
 
   return {
     data: emptySave(),
@@ -79,13 +101,13 @@ export const useGame = create<GameState>((set, get) => {
       } catch (err) {
         console.error('Could not read the saved game', err);
       }
-      set({ data, loaded: true });
+      set({ data: money.housekeep(data, todayStr(), Date.now()), loaded: true });
       // Ask the browser not to clear this site's storage when space runs low.
       void navigator.storage?.persist?.().catch(() => undefined);
     },
 
     replaceData(data) {
-      set({ data });
+      set({ data: money.housekeep(data, todayStr(), Date.now()) });
     },
 
     createHero(name, heroClass, templates) {
@@ -137,6 +159,46 @@ export const useGame = create<GameState>((set, get) => {
     },
     resetAll() {
       set({ data: emptySave() });
+    },
+
+    setupMoney(openingBalance, budget, currency) {
+      applyMoney((d) => money.setupMoney(d, openingBalance, budget, currency, todayStr(), Date.now()));
+    },
+    updateMoney(patch) {
+      applyMoney((d) => money.updateMoney(d, patch, Date.now()));
+    },
+    saveTransaction(input, id) {
+      applyMoney((d) => money.saveTransaction(d, input, id, todayStr(), Date.now()));
+    },
+    deleteTransaction(id) {
+      applyMoney((d) => money.deleteTransaction(d, id, Date.now()));
+    },
+    correctBalance(actual, date) {
+      applyMoney((d) => money.correctBalance(d, actual, date ?? todayStr(), Date.now()));
+    },
+    saveRecurring(input, id) {
+      applyMoney((d) => money.saveRecurring(d, input, id, Date.now()));
+    },
+    deleteRecurring(id) {
+      applyMoney((d) => money.deleteRecurring(d, id, Date.now()));
+    },
+    saveGoal(input, id) {
+      applyMoney((d) => money.saveGoal(d, input, id, Date.now()));
+    },
+    deleteGoal(id) {
+      applyMoney((d) => money.deleteGoal(d, id, Date.now()));
+    },
+    saveDebt(input, id) {
+      applyMoney((d) => money.saveDebt(d, input, id, Date.now()));
+    },
+    deleteDebt(id) {
+      applyMoney((d) => money.deleteDebt(d, id, Date.now()));
+    },
+    importRows(rows) {
+      applyMoney((d) => money.importRows(d, rows, todayStr(), Date.now()));
+    },
+    tick() {
+      applyMoney((d) => d);
     },
   };
 });

@@ -1,0 +1,77 @@
+import type { TxKind } from '../data/types';
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+export const EXPENSE_CATEGORIES: Category[] = [
+  { id: 'groceries', name: 'Groceries' },
+  { id: 'eating', name: 'Eating out' },
+  { id: 'housing', name: 'Housing' },
+  { id: 'bills', name: 'Bills & utilities' },
+  { id: 'transport', name: 'Transport' },
+  { id: 'health', name: 'Health' },
+  { id: 'fun', name: 'Fun' },
+  { id: 'shopping', name: 'Shopping' },
+  { id: 'education', name: 'Education' },
+  { id: 'subscriptions', name: 'Subscriptions' },
+  { id: 'debt', name: 'Debt payment' },
+  { id: 'savings', name: 'Savings' },
+  { id: 'other', name: 'Other' },
+];
+
+export const INCOME_CATEGORIES: Category[] = [
+  { id: 'salary', name: 'Salary' },
+  { id: 'extra', name: 'Extra income' },
+  { id: 'refund', name: 'Refund' },
+  { id: 'other-income', name: 'Other income' },
+];
+
+/** Used for "correct the balance"; never offered as a choice. */
+export const ADJUSTMENT = 'adjustment';
+
+const NAMES = new Map<string, string>([
+  ...[...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.id, c.name] as [string, string]),
+  [ADJUSTMENT, 'Balance correction'],
+]);
+
+export const categoryName = (id: string): string => NAMES.get(id) ?? 'Other';
+
+export const categoriesFor = (kind: TxKind): Category[] => (kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+
+export const defaultCategory = (kind: TxKind): string => (kind === 'expense' ? 'other' : 'other-income');
+
+/**
+ * Money going out that isn't "spending": paying off a debt, putting money aside,
+ * and balance corrections. These don't count against the monthly budget.
+ */
+export const NOT_SPENDING = new Set(['debt', 'savings', ADJUSTMENT]);
+
+const RULES: [RegExp, string][] = [
+  [/ifood|rappi|restaurante|lanchonete|padaria|pizza|burger|mc ?donald|cafe|café|bar /i, 'eating'],
+  [/mercado|supermerc|carrefour|assai|atacad|hortifruti|pao de acucar|pão de açúcar|extra hiper/i, 'groceries'],
+  [/uber|99 ?app|99 ?pop|posto|combust|gasolina|estaciona|metro|metrô|onibus|ônibus|bilhete|pedagio|pedágio/i, 'transport'],
+  [/netflix|spotify|prime video|amazon prime|disney|hbo|youtube|icloud|apple\.com|google one|assinatura/i, 'subscriptions'],
+  [/farmacia|farmácia|drogaria|droga ?raia|drogasil|hospital|clinica|clínica|unimed|laborat/i, 'health'],
+  [/aluguel|condominio|condomínio|iptu/i, 'housing'],
+  [/energia|enel|cemig|copel|light |sabesp|agua|água|internet|vivo|claro|tim |oi fibra|telefone|gas |gás/i, 'bills'],
+  [/steam|playstation|xbox|nintendo|cinema|ingresso|show /i, 'fun'],
+  [/curso|udemy|alura|faculdade|escola|livraria|mensalidade/i, 'education'],
+  [/amazon|mercado ?livre|shopee|magalu|magazine|americanas|aliexpress|shein/i, 'shopping'],
+  [/emprestimo|empréstimo|financiamento|parcela|fatura|juros/i, 'debt'],
+  [/poupanca|poupança|investimento|aplicacao|aplicação|cdb|tesouro/i, 'savings'],
+];
+
+const INCOME_RULES: [RegExp, string][] = [
+  [/salario|salário|folha|pagamento de sal|proventos/i, 'salary'],
+  [/estorno|reembolso|devolucao|devolução/i, 'refund'],
+];
+
+/** A first guess at the category from a bank statement's description. The user can change it. */
+export function guessCategory(memo: string, kind: TxKind): string {
+  for (const [pattern, category] of kind === 'expense' ? RULES : INCOME_RULES) {
+    if (pattern.test(memo)) return category;
+  }
+  return defaultCategory(kind);
+}

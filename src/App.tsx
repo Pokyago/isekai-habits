@@ -8,6 +8,7 @@ import {
   Store,
   Swords,
   User,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -15,22 +16,24 @@ import { LevelUpOverlay, Toasts } from './components/Fx';
 import { useManualDirty } from './components/SyncPanel';
 import { Bar, Button } from './components/ui';
 import { useGame } from './data/store';
-import { useDerived } from './hooks';
+import { useDerived, useToday } from './hooks';
 import { Chronicle } from './screens/Chronicle';
 import { Habits } from './screens/Habits';
 import { Hero } from './screens/Hero';
+import { Money } from './screens/money/Money';
 import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
 import { Shop } from './screens/Shop';
 import { Today } from './screens/Today';
 import { initSync, reconnectSaveFile, syncMode, useSync } from './sync';
 
-type Tab = 'today' | 'hero' | 'habits' | 'shop' | 'chronicle' | 'settings';
+type Tab = 'today' | 'hero' | 'habits' | 'money' | 'shop' | 'chronicle' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'today', label: 'Today', icon: Swords },
   { id: 'hero', label: 'Hero', icon: User },
   { id: 'habits', label: 'Habits', icon: ScrollText },
+  { id: 'money', label: 'Money', icon: Wallet },
   { id: 'shop', label: 'Shop', icon: Store },
   { id: 'chronicle', label: 'Chronicle', icon: CalendarDays },
 ];
@@ -46,6 +49,12 @@ export default function App() {
       .load()
       .then(() => initSync());
   }, []);
+
+  // When a new day starts with the app open, add the monthly money items that came due.
+  const today = useToday();
+  useEffect(() => {
+    if (loaded) useGame.getState().tick();
+  }, [today, loaded]);
 
   // Each section, and the game itself after the summoning, opens at the top of the page.
   useEffect(() => {
@@ -72,6 +81,7 @@ export default function App() {
         {tab === 'today' && <Today onManageHabits={() => setTab('habits')} />}
         {tab === 'hero' && <Hero />}
         {tab === 'habits' && <Habits />}
+        {tab === 'money' && <Money />}
         {tab === 'shop' && <Shop />}
         {tab === 'chronicle' && <Chronicle />}
         {tab === 'settings' && <Settings />}
@@ -90,7 +100,7 @@ export default function App() {
                   type="button"
                   onClick={() => setTab(id)}
                   aria-current={on ? 'page' : undefined}
-                  className={`flex w-full flex-col items-center gap-1 pt-2.5 pb-2 text-[11px] font-medium transition-colors ${
+                  className={`flex w-full flex-col items-center gap-1 pt-2.5 pb-2 text-[10px] font-medium transition-colors sm:text-[11px] ${
                     on ? 'text-glow' : 'text-mute hover:text-ink'
                   }`}
                 >

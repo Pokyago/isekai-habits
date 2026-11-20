@@ -1,7 +1,21 @@
 import type { SaveData } from './types';
 
 export function emptySave(): SaveData {
-  return { version: 1, hero: null, habits: {}, completions: {}, quests: {}, claims: {}, rewards: {}, purchases: {} };
+  return {
+    version: 2,
+    hero: null,
+    habits: {},
+    completions: {},
+    quests: {},
+    claims: {},
+    rewards: {},
+    purchases: {},
+    money: null,
+    transactions: {},
+    recurring: {},
+    goals: {},
+    debts: {},
+  };
 }
 
 /** JSON with object keys sorted, so equal data always gives the same text. */
@@ -38,7 +52,7 @@ function mergeMap<T extends { updatedAt: number }>(a: Record<string, T>, b: Reco
  */
 export function mergeSaves(a: SaveData, b: SaveData): SaveData {
   return {
-    version: 1,
+    version: 2,
     hero: a.hero && b.hero ? newer(a.hero, b.hero) : (a.hero ?? b.hero),
     habits: mergeMap(a.habits, b.habits),
     completions: mergeMap(a.completions, b.completions),
@@ -46,6 +60,11 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     claims: mergeMap(a.claims, b.claims),
     rewards: mergeMap(a.rewards, b.rewards),
     purchases: mergeMap(a.purchases, b.purchases),
+    money: a.money && b.money ? newer(a.money, b.money) : (a.money ?? b.money),
+    transactions: mergeMap(a.transactions, b.transactions),
+    recurring: mergeMap(a.recurring, b.recurring),
+    goals: mergeMap(a.goals, b.goals),
+    debts: mergeMap(a.debts, b.debts),
   };
 }
 
@@ -60,12 +79,17 @@ export function parseSave(text: string): SaveData {
   } catch {
     throw new Error('This file is not a valid Isekai Habits save (it is not JSON).');
   }
-  if (!isRecord(raw) || raw.version !== 1) {
+  if (!isRecord(raw) || typeof raw.version !== 'number' || raw.version < 1) {
     throw new Error('This file is not a valid Isekai Habits save.');
   }
+  // A newer app may store things this one doesn't know about; writing the file back would lose them.
+  if (raw.version > 2) {
+    throw new Error('This save was made by a newer version of Isekai Habits. Update the app on this device first.');
+  }
+  // Version 1 saves simply have no money records yet.
   const map = (key: string) => (isRecord(raw[key]) ? raw[key] : {});
   return {
-    version: 1,
+    version: 2,
     hero: isRecord(raw.hero) ? (raw.hero as unknown as SaveData['hero']) : null,
     habits: map('habits') as SaveData['habits'],
     completions: map('completions') as SaveData['completions'],
@@ -73,6 +97,11 @@ export function parseSave(text: string): SaveData {
     claims: map('claims') as SaveData['claims'],
     rewards: map('rewards') as SaveData['rewards'],
     purchases: map('purchases') as SaveData['purchases'],
+    money: isRecord(raw.money) ? (raw.money as unknown as SaveData['money']) : null,
+    transactions: map('transactions') as SaveData['transactions'],
+    recurring: map('recurring') as SaveData['recurring'],
+    goals: map('goals') as SaveData['goals'],
+    debts: map('debts') as SaveData['debts'],
   };
 }
 

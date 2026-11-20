@@ -42,11 +42,14 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     statXp[q.stat] += q.xp;
     goldEarned += q.gold;
   }
+  const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0 };
   for (const c of Object.values(data.claims)) {
     if (!c.claimed) continue;
     heroXp += c.xp;
     if (c.stat) statXp[c.stat] += c.xp;
     goldEarned += c.gold;
+    const kind = c.id.split('|')[0];
+    if (kind in moneyClaims) moneyClaims[kind as keyof typeof moneyClaims]++;
   }
 
   let spent = 0;
@@ -91,6 +94,10 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
       goldEarned,
       rewardsBought,
       questsDone,
+      ledgerDays: moneyClaims.ledger,
+      budgetsKept: moneyClaims.budget,
+      goalsReached: moneyClaims.goal,
+      debtsCleared: moneyClaims.debt,
     }),
   };
 }

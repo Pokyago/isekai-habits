@@ -6,6 +6,7 @@ import { useFx } from '../data/fx';
 import { SHIELD_COST } from '../data/meta';
 import { useGame } from '../data/store';
 import { useToday } from '../hooks';
+import { BUDGET_GRACE_DAYS, BUDGET_REWARD, LEDGER_REWARD, MILESTONE_REWARD } from '../money/actions';
 import { disconnectSaveFile, downloadBackup, retireSaveFile, syncMode } from '../sync';
 
 export function Settings() {
@@ -64,6 +65,12 @@ export function Settings() {
           <li>Missing a scheduled day resets that habit’s streak. Nothing else is lost.</li>
           <li>A streak shield ({SHIELD_COST} gold) is spent automatically to cover one missed day.</li>
           <li>Guild rank rises with level: E at 5, D at 10, C at 15, B at 20, A at 30, S at 40.</li>
+          <li>
+            Money: the first entry you record each day gives +{LEDGER_REWARD.xp} Fortune XP and +{LEDGER_REWARD.gold}{' '}
+            gold. A month that ends inside your budget gives +{BUDGET_REWARD.xp} XP and +{BUDGET_REWARD.gold} gold; it is
+            judged {BUDGET_GRACE_DAYS} days into the next month. Reaching a savings goal or clearing a debt gives +
+            {MILESTONE_REWARD.xp} XP and +{MILESTONE_REWARD.gold} gold. Game gold and real money are never mixed.
+          </li>
         </ul>
       </Panel>
 

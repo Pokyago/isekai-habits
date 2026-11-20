@@ -14,6 +14,11 @@ export interface AchievementInput {
   goldEarned: number;
   rewardsBought: number;
   questsDone: number;
+  /** Days on which spending was logged. */
+  ledgerDays: number;
+  budgetsKept: number;
+  goalsReached: number;
+  debtsCleared: number;
 }
 
 export function achievements(a: AchievementInput): Achievement[] {
@@ -35,6 +40,11 @@ export function achievements(a: AchievementInput): Achievement[] {
     ['quest', 'Guild Member', 'Finish a quest from your quest log', a.questsDone >= 1],
     ['hoard', 'Coin Hoarder', 'Earn 1,000 gold in total', a.goldEarned >= 1000],
     ['rest', 'Well-Earned Rest', 'Buy a reward from the shop', a.rewardsBought >= 1],
+    ['bookkeeper', 'Bookkeeper', 'Log your spending on 7 different days', a.ledgerDays >= 7],
+    ['treasurer', 'Royal Treasurer', 'Log your spending on 60 different days', a.ledgerDays >= 60],
+    ['within-means', 'Within Your Means', 'Finish a month inside your budget', a.budgetsKept >= 1],
+    ['hoard-goal', 'Dragon’s Hoard', 'Reach a savings goal', a.goalsReached >= 1],
+    ['debt-slayer', 'Debt Slayer', 'Clear a debt completely', a.debtsCleared >= 1],
   ];
   return list.map(([id, title, description, earned]) => ({ id, title, description, earned }));
 }
