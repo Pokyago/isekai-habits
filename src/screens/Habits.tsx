@@ -43,6 +43,7 @@ export function Habits() {
         </Panel>
       )}
 
+      <div className="grid items-start gap-4 lg:grid-cols-2 3xl:grid-cols-3">
       {HABIT_CATEGORIES.map((category) => {
         const group = active.filter((h) => categoryOf(h) === category.id).sort((a, b) => a.name.localeCompare(b.name));
         if (group.length === 0) return null;
@@ -75,6 +76,7 @@ export function Habits() {
           </Panel>
         );
       })}
+      </div>
 
       {archived.length > 0 && (
         <Panel title="Archived">

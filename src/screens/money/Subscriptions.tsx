@@ -32,7 +32,7 @@ export function Subscriptions() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <Panel
         title="Subscriptions"
         right={

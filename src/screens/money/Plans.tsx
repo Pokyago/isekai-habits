@@ -164,7 +164,7 @@ export function Plans({ onAdd }: { onAdd(prefill: Partial<TxInput>): void }) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="grid items-start gap-4 lg:grid-cols-2 3xl:grid-cols-3">
       <Panel title="Debts" right={addButton('Add', () => setDebt('new'))}>
         <p className="mb-3 text-sm text-mute">
           What you owe and how fast it is going down. Record a payment with “Pay”. Clearing a debt earns +

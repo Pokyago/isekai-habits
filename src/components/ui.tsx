@@ -85,7 +85,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose(): 
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-edge bg-panel pb-[env(safe-area-inset-bottom)] sm:rounded-2xl"
+        className="animate-modal max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-edge bg-panel pb-[env(safe-area-inset-bottom)] sm:rounded-2xl"
       >
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-edge/70 bg-panel px-4 py-2">
           <h2 className="text-[11px] font-semibold tracking-[0.2em] text-glow uppercase">{title}</h2>
@@ -108,6 +108,47 @@ export function Bar({ value, max, color = 'var(--color-glow)', className = '' }:
         style={{ width: `${pct}%`, background: color, boxShadow: `0 0 10px ${color}` }}
       />
     </div>
+  );
+}
+
+/** A circular progress ring with something in the middle. */
+export function Ring({
+  value,
+  max,
+  size = 44,
+  stroke = 4,
+  color = 'var(--color-glow)',
+  children,
+}: {
+  value: number;
+  max: number;
+  size?: number;
+  stroke?: number;
+  color?: string;
+  children?: ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const around = 2 * Math.PI * r;
+  const part = max <= 0 ? 0 : Math.min(1, Math.max(0, value / max));
+  return (
+    <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-edge)" strokeOpacity={0.7} strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={around}
+          strokeDashoffset={around * (1 - part)}
+          style={{ transition: 'stroke-dashoffset 0.6s ease-out, stroke 0.3s', filter: `drop-shadow(0 0 4px ${color})` }}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center">{children}</span>
+    </span>
   );
 }
 

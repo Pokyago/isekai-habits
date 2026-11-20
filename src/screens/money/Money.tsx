@@ -36,6 +36,7 @@ export function Money() {
           <Plus size={16} /> Add entry
         </Button>
       </div>
+      <div className="max-w-2xl">
       <Segmented<View>
         label="Money section"
         value={view}
@@ -47,6 +48,7 @@ export function Money() {
           { value: 'subs', label: 'Subscriptions' },
         ]}
       />
+      </div>
 
       {view === 'overview' && (
         <Overview onAdd={add} onEdit={edit} onSeeAll={() => setView('entries')} onSeeSubs={() => setView('subs')} />
@@ -154,7 +156,7 @@ function Overview({
   const top = summary.byCategory[0]?.amount ?? 0;
 
   return (
-    <div className="space-y-4">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <Panel
         title="In the bank"
         right={

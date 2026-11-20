@@ -24,8 +24,8 @@ export function Shop() {
     .slice(0, 8);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="flex items-center justify-between lg:col-span-2">
         <h1 className="font-display text-2xl font-bold">Shop</h1>
         <span className="inline-flex items-center gap-2 rounded-full border border-gold/60 bg-gold/10 px-4 py-1.5 font-display text-xl font-bold text-gold tabular-nums">
           <Coins size={18} /> {d.gold.toLocaleString()}

@@ -1,4 +1,5 @@
 import { Check, Flame, Minus } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { CLASSES, DIFFICULTIES, STATS, statColor } from '../data/meta';
 import { useGame } from '../data/store';
 import type { DateStr, Habit, SaveData } from '../data/types';
@@ -12,11 +13,14 @@ export function HabitCard({
   date,
   data,
   streak,
+  delay = 0,
 }: {
   habit: Habit;
   date: DateStr;
   data: SaveData;
   streak: HabitStreak | undefined;
+  /** Milliseconds to wait before the card appears, so a list arrives one after another. */
+  delay?: number;
 }) {
   const setHabitCount = useGame((s) => s.setHabitCount);
   const completion = data.completions[completionId(habit.id, date)];
@@ -32,7 +36,15 @@ export function HabitCard({
   const weekly = habit.schedule.kind === 'perWeek' ? habit.schedule.times : null;
   const doneThisWeek = weekly ? weekCount(data, habit.id, date) : 0;
 
-  const onMain = () => {
+  // Each time the habit goes from not done to done, play the burst once.
+  const wasDone = useRef(done);
+  const [burst, setBurst] = useState(0);
+  useEffect(() => {
+    if (done && !wasDone.current) setBurst((n) => n + 1);
+    wasDone.current = done;
+  }, [done]);
+
+  const toggle = () => {
     if (counted) {
       if (!done) setHabitCount(habit.id, date, count + 1);
     } else {
@@ -41,38 +53,69 @@ export function HabitCard({
   };
 
   return (
+    // A simple habit can be ticked by clicking anywhere on its card; the round button does the same for the keyboard.
     <div
-      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
-        done ? 'border-edge/50 bg-void/40' : 'border-edge bg-raise/70'
+      onClick={counted ? undefined : toggle}
+      style={{ animationDelay: `${delay}ms` }}
+      className={`animate-rise group relative flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-[background-color,border-color,transform,box-shadow] duration-200 ${
+        counted ? '' : 'cursor-pointer'
+      } ${
+        done
+          ? 'border-edge/50 bg-void/40'
+          : 'border-edge bg-raise/70 hover:-translate-y-0.5 hover:border-mute hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)]'
       }`}
     >
+      {burst > 0 && (
+        <>
+          <span
+            key={`flash-${burst}`}
+            className="animate-complete pointer-events-none absolute inset-0 rounded-xl"
+            style={{ '--flash': color } as CSSProperties}
+          />
+          <span
+            key={`xp-${burst}`}
+            className="animate-float-xp pointer-events-none absolute top-0 right-3 z-10 text-sm font-bold text-gold drop-shadow-[0_0_6px_rgba(243,196,82,0.7)]"
+          >
+            +{xp} XP
+          </span>
+        </>
+      )}
+
       <button
         type="button"
-        onClick={onMain}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle();
+        }}
         aria-pressed={done}
         aria-label={
           counted
             ? `${habit.name}: ${count} of ${habit.target}. Add one`
             : `${done ? 'Undo' : 'Complete'} ${habit.name}`
         }
-        className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition-colors"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition-[background-color,transform,box-shadow] duration-200 group-hover:scale-105 active:scale-90"
         style={{
           borderColor: color,
           background: done ? color : 'transparent',
           color: done ? 'var(--color-void)' : color,
+          boxShadow: done ? `0 0 14px color-mix(in srgb, ${color} 55%, transparent)` : undefined,
         }}
       >
         {done ? (
           <Check key="done" size={24} strokeWidth={3} className="animate-pop" />
         ) : counted ? (
-          <span>
+          <span key={count} className={count > 0 ? 'animate-pop' : ''}>
             {count}/{habit.target}
           </span>
         ) : null}
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className={`line-clamp-2 text-[15px] leading-snug font-medium ${done ? 'text-mute line-through decoration-mute/50' : ''}`}>
+        <p
+          className={`line-clamp-2 text-[15px] leading-snug font-medium transition-colors ${
+            done ? 'text-mute line-through decoration-mute/50' : ''
+          }`}
+        >
           {habit.name}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">

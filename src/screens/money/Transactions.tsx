@@ -90,7 +90,7 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-center justify-between gap-2">
         <IconButton label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
           <ChevronLeft size={20} />

@@ -96,8 +96,8 @@ export function Health() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="flex items-center justify-between lg:col-span-2">
         <h1 className="font-display text-2xl font-bold">Health</h1>
         <Button variant="gold" onClick={openCheckIn}>
           <Plus size={16} /> Check in
@@ -163,7 +163,7 @@ export function Health() {
       )}
 
       {entries.length > 0 && (
-        <Panel title="Trend">
+        <Panel title="Trend" className="lg:col-start-2 lg:row-span-2 lg:row-start-2">
           <div className="mb-3 flex flex-wrap gap-2">
             <select
               className={`${inputClass} w-auto min-w-40 flex-1`}

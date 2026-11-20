@@ -16,7 +16,7 @@ export function Hero() {
   const earned = d.achievements.filter((a) => a.earned).length;
 
   return (
-    <div className="space-y-4">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <Panel title="Status">
         <div className="flex items-center gap-4">
           <div
@@ -83,7 +83,7 @@ export function Hero() {
         </ul>
       </Panel>
 
-      <Panel title="Record">
+      <Panel title="Record" className="lg:col-span-2">
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             ['Habits completed', d.completions],
@@ -99,8 +99,8 @@ export function Hero() {
         </dl>
       </Panel>
 
-      <Panel title="Titles" right={<span className="text-xs text-mute">{earned}/{d.achievements.length}</span>}>
-        <ul className="grid gap-2 sm:grid-cols-2">
+      <Panel className="lg:col-span-2" title="Titles" right={<span className="text-xs text-mute">{earned}/{d.achievements.length}</span>}>
+        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {d.achievements.map((a) => (
             <li
               key={a.id}
