@@ -5,7 +5,7 @@ dev-dist
 .DS_Store
 
 # Your save file, when it is kept next to the app instead of in iCloud Drive
-Data/
+/Data/
 
 # Build leftovers of the desktop window
 desktop/bin/
