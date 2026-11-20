@@ -5,6 +5,7 @@ import { Button, Modal, Panel, inputClass } from '../components/ui';
 import { useFx } from '../data/fx';
 import { SHIELD_COST } from '../data/meta';
 import { useGame } from '../data/store';
+import { HEALTH_REWARD } from '../health/health';
 import { useToday } from '../hooks';
 import { BUDGET_GRACE_DAYS, BUDGET_REWARD, LEDGER_REWARD, MILESTONE_REWARD } from '../money/actions';
 import { disconnectSaveFile, downloadBackup, retireSaveFile, syncMode } from '../sync';
@@ -70,6 +71,10 @@ export function Settings() {
             gold. A month that ends inside your budget gives +{BUDGET_REWARD.xp} XP and +{BUDGET_REWARD.gold} gold; it is
             judged {BUDGET_GRACE_DAYS} days into the next month. Reaching a savings goal or clearing a debt gives +
             {MILESTONE_REWARD.xp} XP and +{MILESTONE_REWARD.gold} gold. Game gold and real money are never mixed.
+          </li>
+          <li>
+            Health: the first check-in of each week gives +{HEALTH_REWARD.xp} Vitality XP and +{HEALTH_REWARD.gold}{' '}
+            gold. Nothing depends on what the numbers are.
           </li>
         </ul>
       </Panel>

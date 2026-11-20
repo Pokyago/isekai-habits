@@ -1,9 +1,11 @@
 import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { HabitCard } from '../components/HabitCard';
 import { Bar, Button, Chip, Empty, IconButton, Panel, StatIcon, inputClass } from '../components/ui';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, statColor } from '../data/meta';
+import { categoryIndex, habitCategory } from '../data/habitCategories';
 import { useGame } from '../data/store';
+import { categoryOf } from '../data/templates';
 import type { Difficulty, Habit, StatKey } from '../data/types';
 import { useDerived, useToday } from '../hooks';
 import { dailyQuests } from '../game/dailyQuests';
@@ -13,8 +15,31 @@ import { BASE_XP } from '../game/xp';
 
 const DAYS_BACK = 7;
 
-const byStatThenName = (a: Habit, b: Habit) =>
-  STAT_ORDER.indexOf(a.stat) - STAT_ORDER.indexOf(b.stat) || a.name.localeCompare(b.name);
+const byCategoryThenName = (a: Habit, b: Habit) =>
+  categoryIndex(categoryOf(a)) - categoryIndex(categoryOf(b)) || a.name.localeCompare(b.name);
+
+/** Habit cards under a small heading per category. With a single category the heading is left out. */
+function HabitGroups({ habits, render }: { habits: Habit[]; render(habit: Habit): ReactNode }) {
+  const groups: { id: string; habits: Habit[] }[] = [];
+  for (const h of habits) {
+    const id = categoryOf(h);
+    const last = groups[groups.length - 1];
+    if (last && last.id === id) last.habits.push(h);
+    else groups.push({ id, habits: [h] });
+  }
+  return (
+    <div className="space-y-4">
+      {groups.map((g) => (
+        <section key={g.id} className="space-y-2">
+          {groups.length > 1 && (
+            <h3 className="px-1 text-[11px] font-semibold tracking-wide text-mute uppercase">{habitCategory(g.id).name}</h3>
+          )}
+          {g.habits.map(render)}
+        </section>
+      ))}
+    </div>
+  );
+}
 
 export function Today({ onManageHabits }: { onManageHabits(): void }) {
   const data = useGame((s) => s.data);
@@ -23,7 +48,7 @@ export function Today({ onManageHabits }: { onManageHabits(): void }) {
   const [offset, setOffset] = useState(0);
   const date = addDays(today, -offset);
 
-  const due = useMemo(() => dueHabits(data, date).sort(byStatThenName), [data, date]);
+  const due = useMemo(() => dueHabits(data, date).sort(byCategoryThenName), [data, date]);
   const scheduled = due.filter((h) => h.schedule.kind === 'weekdays');
   const weekly = due.filter((h) => h.schedule.kind === 'perWeek');
   const quests = useMemo(() => dailyQuests(data, date), [data, date]);
@@ -96,21 +121,19 @@ export function Today({ onManageHabits }: { onManageHabits(): void }) {
             )}
           </div>
         ) : (
-          <div className="space-y-2">
-            {scheduled.map((h) => (
-              <HabitCard key={h.id} habit={h} date={date} data={data} streak={derived.streaks[h.id]} />
-            ))}
-          </div>
+          <HabitGroups
+            habits={scheduled}
+            render={(h) => <HabitCard key={h.id} habit={h} date={date} data={data} streak={derived.streaks[h.id]} />}
+          />
         )}
       </Panel>
 
       {weekly.length > 0 && (
         <Panel title="This week">
-          <div className="space-y-2">
-            {weekly.map((h) => (
-              <HabitCard key={h.id} habit={h} date={date} data={data} streak={derived.streaks[h.id]} />
-            ))}
-          </div>
+          <HabitGroups
+            habits={weekly}
+            render={(h) => <HabitCard key={h.id} habit={h} date={date} data={data} streak={derived.streaks[h.id]} />}
+          />
         </Panel>
       )}
 

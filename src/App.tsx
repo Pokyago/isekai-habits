@@ -1,6 +1,6 @@
 import {
-  CalendarDays,
   Coins,
+  HeartPulse,
   RefreshCw,
   ScrollText,
   Settings as SettingsIcon,
@@ -14,11 +14,12 @@ import {
 import { useEffect, useState } from 'react';
 import { LevelUpOverlay, Toasts } from './components/Fx';
 import { useManualDirty } from './components/SyncPanel';
-import { Bar, Button } from './components/ui';
+import { Bar, Button, Segmented } from './components/ui';
 import { useGame } from './data/store';
 import { useDerived, useToday } from './hooks';
 import { Chronicle } from './screens/Chronicle';
 import { Habits } from './screens/Habits';
+import { Health } from './screens/Health';
 import { Hero } from './screens/Hero';
 import { Money } from './screens/money/Money';
 import { Onboarding } from './screens/Onboarding';
@@ -27,15 +28,15 @@ import { Shop } from './screens/Shop';
 import { Today } from './screens/Today';
 import { initSync, reconnectSaveFile, syncMode, useSync } from './sync';
 
-type Tab = 'today' | 'hero' | 'habits' | 'money' | 'shop' | 'chronicle' | 'settings';
+type Tab = 'today' | 'habits' | 'health' | 'money' | 'shop' | 'hero' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'today', label: 'Today', icon: Swords },
-  { id: 'hero', label: 'Hero', icon: User },
   { id: 'habits', label: 'Habits', icon: ScrollText },
+  { id: 'health', label: 'Health', icon: HeartPulse },
   { id: 'money', label: 'Money', icon: Wallet },
   { id: 'shop', label: 'Shop', icon: Store },
-  { id: 'chronicle', label: 'Chronicle', icon: CalendarDays },
+  { id: 'hero', label: 'Hero', icon: User },
 ];
 
 export default function App() {
@@ -79,11 +80,11 @@ export default function App() {
       {tab !== 'settings' && <SyncNotice onOpenSettings={() => setTab('settings')} />}
       <main key={tab} className="animate-fade">
         {tab === 'today' && <Today onManageHabits={() => setTab('habits')} />}
-        {tab === 'hero' && <Hero />}
+        {tab === 'hero' && <HeroPage />}
+        {tab === 'health' && <Health />}
         {tab === 'habits' && <Habits />}
         {tab === 'money' && <Money />}
         {tab === 'shop' && <Shop />}
-        {tab === 'chronicle' && <Chronicle />}
         {tab === 'settings' && <Settings />}
       </main>
 
@@ -115,6 +116,25 @@ export default function App() {
 
       <Toasts />
       <LevelUpOverlay />
+    </div>
+  );
+}
+
+/** The Hero tab: the character sheet, and the chronicle of what has been done. */
+function HeroPage() {
+  const [view, setView] = useState<'status' | 'chronicle'>('status');
+  return (
+    <div className="space-y-4">
+      <Segmented<'status' | 'chronicle'>
+        label="Hero section"
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'status', label: 'Status' },
+          { value: 'chronicle', label: 'Chronicle' },
+        ]}
+      />
+      {view === 'status' ? <Hero /> : <Chronicle />}
     </div>
   );
 }

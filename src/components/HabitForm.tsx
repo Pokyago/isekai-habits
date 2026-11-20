@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { HabitInput } from '../data/actions';
+import { HABIT_CATEGORIES, habitCategory } from '../data/habitCategories';
+import { categoryOf } from '../data/templates';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, WEEKDAY_DISPLAY_ORDER, WEEKDAY_LABELS, statColor } from '../data/meta';
 import type { Difficulty, Habit, StatKey } from '../data/types';
 import { BASE_XP } from '../game/xp';
@@ -7,15 +9,19 @@ import { Button, Field, Modal, Segmented, StatIcon, inputClass } from './ui';
 
 export function HabitForm({
   habit,
+  initialCategory,
   onSave,
   onClose,
 }: {
   habit?: Habit;
+  /** For a new habit: the category to start on. */
+  initialCategory?: string;
   onSave(input: HabitInput): void;
   onClose(): void;
 }) {
   const [name, setName] = useState(habit?.name ?? '');
-  const [stat, setStat] = useState<StatKey>(habit?.stat ?? 'str');
+  const [category, setCategory] = useState(habit ? categoryOf(habit) : (initialCategory ?? 'exercise'));
+  const [stat, setStat] = useState<StatKey>(habit?.stat ?? habitCategory(initialCategory ?? 'exercise').stat);
   const [difficulty, setDifficulty] = useState<Difficulty>(habit?.difficulty ?? 'easy');
   const [kind, setKind] = useState<'weekdays' | 'perWeek'>(habit?.schedule.kind ?? 'weekdays');
   const [days, setDays] = useState<number[]>(
@@ -32,6 +38,7 @@ export function HabitForm({
     if (!valid) return;
     onSave({
       name,
+      category,
       stat,
       difficulty,
       schedule: kind === 'weekdays' ? { kind, days } : { kind, times },
@@ -58,6 +65,24 @@ export function HabitForm({
             maxLength={80}
             autoFocus={!habit}
           />
+        </Field>
+
+        <Field label="Category">
+          <select
+            className={inputClass}
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              // Each category has a natural stat; "Other" leaves the choice alone.
+              if (e.target.value !== 'other') setStat(habitCategory(e.target.value).stat);
+            }}
+          >
+            {HABIT_CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <div>

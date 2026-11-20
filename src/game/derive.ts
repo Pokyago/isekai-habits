@@ -42,7 +42,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     statXp[q.stat] += q.xp;
     goldEarned += q.gold;
   }
-  const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0 };
+  const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0, health: 0 };
   for (const c of Object.values(data.claims)) {
     if (!c.claimed) continue;
     heroXp += c.xp;
@@ -98,6 +98,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
       budgetsKept: moneyClaims.budget,
       goalsReached: moneyClaims.goal,
       debtsCleared: moneyClaims.debt,
+      healthWeeks: moneyClaims.health,
     }),
   };
 }

@@ -34,6 +34,7 @@ const classStat = (data: SaveData): StatKey | null => (data.hero ? CLASSES[data.
 
 export interface HabitInput {
   name: string;
+  category: string;
   stat: StatKey;
   difficulty: Difficulty;
   schedule: Schedule;
@@ -54,6 +55,7 @@ export function createHero(
     habits[id] = {
       id,
       name: t.name,
+      category: t.category,
       stat: t.stat,
       difficulty: t.difficulty,
       schedule: t.schedule,
@@ -77,6 +79,16 @@ export function createHero(
     habits,
     rewards,
   };
+}
+
+/** Adds habits picked from the library. */
+export function addTemplates(data: SaveData, templates: HabitTemplate[], today: DateStr, now: number): SaveData {
+  let next = data;
+  for (const t of templates) {
+    const { name, category, stat, difficulty, schedule, target } = t;
+    next = saveHabit(next, { name, category, stat, difficulty, schedule, target }, undefined, today, now);
+  }
+  return next;
 }
 
 export function renameHero(data: SaveData, name: string, now: number): SaveData {

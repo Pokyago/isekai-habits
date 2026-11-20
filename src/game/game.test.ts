@@ -174,7 +174,7 @@ describe('completing habits', () => {
     let d = withHabit(emptySave(), { id: 'a', difficulty: 'hard' });
     d = complete(d, 'a', [MON]);
     const before = derive(d, MON).heroXp;
-    d = actions.saveHabit(d, { name: 'a', stat: 'int', difficulty: 'trivial', schedule: DAILY, target: 1 }, 'a', MON, 50);
+    d = actions.saveHabit(d, { name: 'a', category: 'study', stat: 'int', difficulty: 'trivial', schedule: DAILY, target: 1 }, 'a', MON, 50);
     d = actions.deleteHabit(d, 'a', 60);
     const after = derive(d, MON);
     expect(after.heroXp).toBe(before);
@@ -248,7 +248,7 @@ describe('merging saves', () => {
 
   it('lets the newest edit win and keeps deletions', () => {
     const shared = withHabit(emptySave(), { id: 'a', name: 'Old' });
-    const renamed = actions.saveHabit(shared, { name: 'New', stat: 'str', difficulty: 'easy', schedule: DAILY, target: 1 }, 'a', MON, 500);
+    const renamed = actions.saveHabit(shared, { name: 'New', category: 'exercise', stat: 'str', difficulty: 'easy', schedule: DAILY, target: 1 }, 'a', MON, 500);
     const deleted = actions.deleteHabit(shared, 'a', 900);
     expect(mergeSaves(renamed, shared).habits.a.name).toBe('New');
     expect(mergeSaves(renamed, deleted).habits.a.deleted).toBe(true);

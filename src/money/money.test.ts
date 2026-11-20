@@ -574,6 +574,7 @@ describe('saving and merging', () => {
     const old = JSON.stringify({ version: 1, hero: null, habits: {}, completions: {}, quests: {}, claims: {}, rewards: {}, purchases: {} });
     expect(parseSave(old)).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 2, money: null, transactions: {} }))).toEqual(emptySave());
-    expect(() => parseSave(JSON.stringify({ version: 4 }))).toThrow(/newer version/);
+    expect(parseSave(JSON.stringify({ version: 3, subscriptions: {} }))).toEqual(emptySave());
+    expect(() => parseSave(JSON.stringify({ version: 5 }))).toThrow(/newer version/);
   });
 });

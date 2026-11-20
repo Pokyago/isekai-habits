@@ -1,21 +1,18 @@
-import { Check } from 'lucide-react';
 import { useState } from 'react';
 import { SyncPanel } from '../components/SyncPanel';
-import { Button, Chip, Panel, StatIcon, inputClass } from '../components/ui';
-import { CLASSES, CLASS_ORDER, DIFFICULTIES, STATS, statColor } from '../data/meta';
+import { TemplatePicker } from '../components/TemplatePicker';
+import { Button, Panel, StatIcon, inputClass } from '../components/ui';
+import { CLASSES, CLASS_ORDER, STATS, statColor } from '../data/meta';
 import { useGame } from '../data/store';
-import { TEMPLATE_GROUPS } from '../data/templates';
+import { ALL_TEMPLATES, SUGGESTED_TEMPLATES } from '../data/templates';
 import type { HeroClass } from '../data/types';
-import { scheduleLabel } from '../game/schedule';
-
-const SUGGESTED = ['walk', 'read', 'plan', 'bed'];
 
 export function Onboarding() {
   const createHero = useGame((s) => s.createHero);
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [heroClass, setHeroClass] = useState<HeroClass>('warrior');
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(SUGGESTED));
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(SUGGESTED_TEMPLATES));
   const [showLoad, setShowLoad] = useState(false);
 
   const toggle = (key: string) =>
@@ -26,7 +23,7 @@ export function Onboarding() {
     });
 
   const begin = () => {
-    const templates = TEMPLATE_GROUPS.flatMap((g) => g.templates).filter((t) => picked.has(t.key));
+    const templates = ALL_TEMPLATES.filter((t) => picked.has(t.key));
     createHero(name, heroClass, templates);
   };
 
@@ -42,7 +39,7 @@ export function Onboarding() {
         <p className="mx-auto mt-3 max-w-md text-sm text-pretty text-mute">
           {step === 0 && 'Here, strength is not granted. It is earned, one real-life habit at a time. Every habit you keep makes your hero stronger.'}
           {step === 1 && 'Your class earns 10% more XP from habits that train its stat. You can train every stat whatever you pick.'}
-          {step === 2 && 'Start small. Three to five habits you can actually keep beat a long list you abandon. You can add more at any time.'}
+          {step === 2 && 'Start small. Three to five habits you can actually keep beat a long list you abandon. Four are ticked to get you going; open a category to see more, and add others at any time.'}
         </p>
       </header>
 
@@ -134,42 +131,9 @@ export function Onboarding() {
 
       {step === 2 && (
         <>
-          {TEMPLATE_GROUPS.map((group) => (
-            <Panel key={group.area} title={group.area}>
-              <ul className="space-y-1.5">
-                {group.templates.map((t) => {
-                  const on = picked.has(t.key);
-                  return (
-                    <li key={t.key}>
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={on}
-                        onClick={() => toggle(t.key)}
-                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                          on ? 'border-glow/70 bg-glow/10' : 'border-edge/70 bg-void/40 hover:border-mute'
-                        }`}
-                      >
-                        <span
-                          className={`flex size-5 shrink-0 items-center justify-center rounded border ${
-                            on ? 'border-glow bg-glow text-void' : 'border-mute'
-                          }`}
-                        >
-                          {on && <Check size={14} strokeWidth={3} />}
-                        </span>
-                        <span className="min-w-0 flex-1 text-sm">{t.name}</span>
-                        <span className="flex shrink-0 flex-wrap justify-end gap-1">
-                          <Chip color={statColor(t.stat)}>{STATS[t.stat].short}</Chip>
-                          <Chip>{DIFFICULTIES[t.difficulty].name}</Chip>
-                          <Chip>{scheduleLabel(t.schedule)}</Chip>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Panel>
-          ))}
+          <Panel title="Habit library">
+            <TemplatePicker picked={picked} onToggle={toggle} />
+          </Panel>
           <div className="sticky bottom-3 flex items-center justify-between rounded-xl border border-edge bg-panel/95 p-2 backdrop-blur">
             <Button variant="ghost" onClick={() => setStep(1)}>
               Back

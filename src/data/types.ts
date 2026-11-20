@@ -22,6 +22,8 @@ export interface Habit {
   id: string;
   name: string;
   stat: StatKey;
+  /** Which part of life it belongs to (see habitCategories.ts). Habits from before categories have none. */
+  category?: string;
   difficulty: Difficulty;
   schedule: Schedule;
   /** How many times it must be ticked in a day to count as done (1 for a simple check). */
@@ -88,6 +90,36 @@ export interface Purchase {
   name: string;
   cost: number;
   date: DateStr;
+  updatedAt: number;
+}
+
+// ---------- health ----------
+
+/** One health check-in. There is at most one per day; its id is its date. Anything not measured is null. */
+export interface HealthEntry {
+  id: string;
+  date: DateStr;
+  /** Kilograms. */
+  weight: number | null;
+  /** Resting heart rate, beats per minute. */
+  restingBpm: number | null;
+  /** Blood pressure, mmHg. */
+  systolic: number | null;
+  diastolic: number | null;
+  /** Percent. */
+  bodyFat: number | null;
+  /** Centimetres. */
+  waist: number | null;
+  /** Average hours of sleep a night since the last check-in. */
+  sleepHours: number | null;
+  note: string;
+  deleted: boolean;
+  updatedAt: number;
+}
+
+export interface HealthProfile {
+  heightCm: number | null;
+  goalWeight: number | null;
   updatedAt: number;
 }
 
@@ -196,12 +228,12 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 3;
+  version: 4;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
   quests: Record<string, Quest>;
-  /** Rewards already given: daily quests (`date|slot`) and money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`). */
+  /** Rewards already given: daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) and weekly health check-ins (`health|monday`). */
   claims: Record<string, QuestClaim>;
   rewards: Record<string, Reward>;
   purchases: Record<string, Purchase>;
@@ -211,4 +243,6 @@ export interface SaveData {
   subscriptions: Record<string, Subscription>;
   goals: Record<string, Goal>;
   debts: Record<string, Debt>;
+  health: Record<string, HealthEntry>;
+  healthProfile: HealthProfile | null;
 }

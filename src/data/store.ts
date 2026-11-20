@@ -7,6 +7,8 @@ import * as actions from './actions';
 import type { HabitInput } from './actions';
 import { useFx } from './fx';
 import { emptySave, parseSave, serializeSave } from './merge';
+import * as health from '../health/health';
+import type { CheckInInput } from '../health/health';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
 import type { ImportRow } from '../money/statement';
@@ -24,6 +26,7 @@ interface GameState {
   createHero(name: string, heroClass: HeroClass, templates: HabitTemplate[]): void;
   renameHero(name: string): void;
   saveHabit(input: HabitInput, id?: string): void;
+  addTemplates(templates: HabitTemplate[]): void;
   setArchived(id: string, archived: boolean): void;
   deleteHabit(id: string): void;
   setHabitCount(habitId: string, date: DateStr, count: number): void;
@@ -51,6 +54,11 @@ interface GameState {
   saveDebt(input: DebtInput, id?: string): void;
   deleteDebt(id: string): void;
   importRows(rows: ImportRow[]): void;
+  // Health
+  saveCheckIn(input: CheckInInput): void;
+  deleteCheckIn(id: string): void;
+  saveHealthProfile(profile: { heightCm: number | null; goalWeight: number | null }): void;
+
   /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
   tick(): void;
 }
@@ -120,6 +128,9 @@ export const useGame = create<GameState>((set, get) => {
     },
     saveHabit(input, id) {
       apply((d) => actions.saveHabit(d, input, id, todayStr(), Date.now()));
+    },
+    addTemplates(templates) {
+      apply((d) => actions.addTemplates(d, templates, todayStr(), Date.now()));
     },
     setArchived(id, archived) {
       apply((d) => actions.setArchived(d, id, archived, todayStr(), Date.now()));
@@ -204,6 +215,15 @@ export const useGame = create<GameState>((set, get) => {
     },
     importRows(rows) {
       applyMoney((d) => money.importRows(d, rows, todayStr(), Date.now()));
+    },
+    saveCheckIn(input) {
+      apply((d) => health.saveCheckIn(d, input, todayStr(), Date.now()), true);
+    },
+    deleteCheckIn(id) {
+      apply((d) => health.deleteCheckIn(d, id, Date.now()));
+    },
+    saveHealthProfile(profile) {
+      apply((d) => health.saveHealthProfile(d, profile, Date.now()));
     },
     tick() {
       applyMoney((d) => d);
