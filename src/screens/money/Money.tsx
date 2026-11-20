@@ -3,16 +3,19 @@ import { useMemo, useState } from 'react';
 import { Bar, Button, Empty, Field, Panel, Segmented, inputClass } from '../../components/ui';
 import { useGame } from '../../data/store';
 import type { Transaction } from '../../data/types';
+import { daysBetween } from '../../game/dates';
 import { BUDGET_REWARD, LEDGER_REWARD } from '../../money/actions';
 import type { TxInput } from '../../money/actions';
 import { activeTransactions, balance, budgetStatus, monthSummary } from '../../money/calc';
 import { categoryName } from '../../money/categories';
 import { CURRENCIES, DEFAULT_CURRENCY, formatMonth, monthOf, parseAmount } from '../../money/format';
+import { subscriptionTotals, upcomingCharges } from '../../money/subscriptions';
 import { AmountInput, BalanceForm, BudgetForm, Stats, TransactionForm, useMoney } from './forms';
 import { DebtList, GoalList, Plans } from './Plans';
+import { Subscriptions, inDays } from './Subscriptions';
 import { Transactions, TxRow } from './Transactions';
 
-type View = 'overview' | 'entries' | 'plans';
+type View = 'overview' | 'entries' | 'plans' | 'subs';
 
 export function Money() {
   const hasMoney = useGame((s) => s.data.money !== null);
@@ -41,12 +44,16 @@ export function Money() {
           { value: 'overview', label: 'Overview' },
           { value: 'entries', label: 'Entries' },
           { value: 'plans', label: 'Debts & goals' },
+          { value: 'subs', label: 'Subscriptions' },
         ]}
       />
 
-      {view === 'overview' && <Overview onAdd={add} onEdit={edit} onSeeAll={() => setView('entries')} />}
+      {view === 'overview' && (
+        <Overview onAdd={add} onEdit={edit} onSeeAll={() => setView('entries')} onSeeSubs={() => setView('subs')} />
+      )}
       {view === 'entries' && <Transactions onEdit={edit} />}
       {view === 'plans' && <Plans onAdd={add} />}
+      {view === 'subs' && <Subscriptions />}
 
       {form && <TransactionForm tx={form.tx} initial={form.initial} onClose={() => setForm(null)} />}
     </div>
@@ -112,10 +119,12 @@ function Overview({
   onAdd,
   onEdit,
   onSeeAll,
+  onSeeSubs,
 }: {
   onAdd(initial?: Partial<TxInput>): void;
   onEdit(tx: Transaction): void;
   onSeeAll(): void;
+  onSeeSubs(): void;
 }) {
   const { data, today, fmt } = useMoney();
   const [correcting, setCorrecting] = useState(false);
@@ -135,6 +144,12 @@ function Overview({
   );
   const hasDebts = Object.values(data.debts).some((d) => !d.deleted);
   const hasGoals = Object.values(data.goals).some((g) => !g.deleted);
+  const subs = useMemo(() => subscriptionTotals(data), [data]);
+  // Charges coming up in the next two weeks, at most three.
+  const dueSoon = useMemo(
+    () => upcomingCharges(data, today).filter((u) => daysBetween(today, u.date) <= 14).slice(0, 3),
+    [data, today],
+  );
   const net = summary.income - summary.out;
   const top = summary.byCategory[0]?.amount ?? 0;
 
@@ -227,6 +242,34 @@ function Overview({
             <DebtList onPay={onAdd} />
             <GoalList onSave={onAdd} />
           </div>
+        </Panel>
+      )}
+
+      {subs.count > 0 && (
+        <Panel
+          title="Subscriptions"
+          right={
+            <Button variant="ghost" className="-mr-2 min-h-8" onClick={onSeeSubs}>
+              See all
+            </Button>
+          }
+        >
+          <p className="text-sm">
+            <strong className="tabular-nums">{fmt(subs.perMonth)}</strong> a month across {subs.count}{' '}
+            {subs.count === 1 ? 'subscription' : 'subscriptions'}.
+          </p>
+          {dueSoon.length > 0 && (
+            <ul className="mt-2 space-y-1 text-sm">
+              {dueSoon.map(({ sub, date }) => (
+                <li key={sub.id} className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate">
+                    {sub.name} <span className="text-xs text-mute">{inDays(daysBetween(today, date))}</span>
+                  </span>
+                  <span className="shrink-0 text-mute tabular-nums">{fmt(sub.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
       )}
 

@@ -8,7 +8,7 @@ import type { HabitInput } from './actions';
 import { useFx } from './fx';
 import { emptySave, parseSave, serializeSave } from './merge';
 import * as money from '../money/actions';
-import type { DebtInput, GoalInput, RecurringInput, TxInput } from '../money/actions';
+import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
 import type { ImportRow } from '../money/statement';
 import type { HabitTemplate } from './templates';
 import type { DateStr, Difficulty, HeroClass, SaveData, StatKey } from './types';
@@ -44,6 +44,8 @@ interface GameState {
   correctBalance(actual: number, date?: DateStr): void;
   saveRecurring(input: RecurringInput, id?: string): void;
   deleteRecurring(id: string): void;
+  saveSubscription(input: SubscriptionInput, id?: string): void;
+  deleteSubscription(id: string): void;
   saveGoal(input: GoalInput, id?: string): void;
   deleteGoal(id: string): void;
   saveDebt(input: DebtInput, id?: string): void;
@@ -181,6 +183,12 @@ export const useGame = create<GameState>((set, get) => {
     },
     deleteRecurring(id) {
       applyMoney((d) => money.deleteRecurring(d, id, Date.now()));
+    },
+    saveSubscription(input, id) {
+      applyMoney((d) => money.saveSubscription(d, input, id, todayStr(), Date.now()));
+    },
+    deleteSubscription(id) {
+      applyMoney((d) => money.deleteSubscription(d, id, Date.now()));
     },
     saveGoal(input, id) {
       applyMoney((d) => money.saveGoal(d, input, id, Date.now()));

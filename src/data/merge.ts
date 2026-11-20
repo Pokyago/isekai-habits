@@ -2,7 +2,7 @@ import type { SaveData } from './types';
 
 export function emptySave(): SaveData {
   return {
-    version: 2,
+    version: 3,
     hero: null,
     habits: {},
     completions: {},
@@ -13,6 +13,7 @@ export function emptySave(): SaveData {
     money: null,
     transactions: {},
     recurring: {},
+    subscriptions: {},
     goals: {},
     debts: {},
   };
@@ -52,7 +53,7 @@ function mergeMap<T extends { updatedAt: number }>(a: Record<string, T>, b: Reco
  */
 export function mergeSaves(a: SaveData, b: SaveData): SaveData {
   return {
-    version: 2,
+    version: 3,
     hero: a.hero && b.hero ? newer(a.hero, b.hero) : (a.hero ?? b.hero),
     habits: mergeMap(a.habits, b.habits),
     completions: mergeMap(a.completions, b.completions),
@@ -63,6 +64,7 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     money: a.money && b.money ? newer(a.money, b.money) : (a.money ?? b.money),
     transactions: mergeMap(a.transactions, b.transactions),
     recurring: mergeMap(a.recurring, b.recurring),
+    subscriptions: mergeMap(a.subscriptions, b.subscriptions),
     goals: mergeMap(a.goals, b.goals),
     debts: mergeMap(a.debts, b.debts),
   };
@@ -83,13 +85,13 @@ export function parseSave(text: string): SaveData {
     throw new Error('This file is not a valid Isekai Habits save.');
   }
   // A newer app may store things this one doesn't know about; writing the file back would lose them.
-  if (raw.version > 2) {
+  if (raw.version > 3) {
     throw new Error('This save was made by a newer version of Isekai Habits. Update the app on this device first.');
   }
-  // Version 1 saves simply have no money records yet.
+  // Older saves simply lack the newer collections: version 1 has no money records, version 2 no subscriptions.
   const map = (key: string) => (isRecord(raw[key]) ? raw[key] : {});
   return {
-    version: 2,
+    version: 3,
     hero: isRecord(raw.hero) ? (raw.hero as unknown as SaveData['hero']) : null,
     habits: map('habits') as SaveData['habits'],
     completions: map('completions') as SaveData['completions'],
@@ -100,6 +102,7 @@ export function parseSave(text: string): SaveData {
     money: isRecord(raw.money) ? (raw.money as unknown as SaveData['money']) : null,
     transactions: map('transactions') as SaveData['transactions'],
     recurring: map('recurring') as SaveData['recurring'],
+    subscriptions: map('subscriptions') as SaveData['subscriptions'],
     goals: map('goals') as SaveData['goals'],
     debts: map('debts') as SaveData['debts'],
   };

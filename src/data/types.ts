@@ -144,6 +144,29 @@ export interface Recurring {
   updatedAt: number;
 }
 
+/** A subscription: something charged every month or every year (streaming, software, memberships). */
+export interface Subscription {
+  id: string;
+  name: string;
+  /** What one charge costs: per month, or per year for a yearly one. */
+  amount: number;
+  cycle: 'monthly' | 'yearly';
+  /** A date it is charged on. Other charges fall a whole number of months or years from it. */
+  anchor: DateStr;
+  /**
+   * 'bank': each charge is added to the entries automatically.
+   * 'card': tracked only, since the charge is already inside the credit card bill.
+   */
+  paidWith: 'bank' | 'card';
+  /** False once cancelled or paused: kept in the list but not counted or charged. */
+  active: boolean;
+  note: string;
+  /** The day it was added. Only charges from then on are added to the entries. */
+  since: DateStr;
+  deleted: boolean;
+  updatedAt: number;
+}
+
 export interface Goal {
   id: string;
   name: string;
@@ -173,7 +196,7 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 2;
+  version: 3;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
@@ -185,6 +208,7 @@ export interface SaveData {
   money: MoneySettings | null;
   transactions: Record<string, Transaction>;
   recurring: Record<string, Recurring>;
+  subscriptions: Record<string, Subscription>;
   goals: Record<string, Goal>;
   debts: Record<string, Debt>;
 }

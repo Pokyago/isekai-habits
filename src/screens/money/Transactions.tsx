@@ -18,7 +18,7 @@ export function TxRow({ tx, onEdit }: { tx: Transaction; onEdit(tx: Transaction)
   const income = tx.kind === 'income';
   const tags = [
     tx.note && tx.note !== categoryName(tx.category) ? categoryName(tx.category) : null,
-    tx.source === 'recurring' ? 'monthly' : tx.source === 'import' ? 'from bank file' : null,
+    tx.source === 'recurring' ? 'automatic' : tx.source === 'import' ? 'from bank file' : null,
     countsInBalance(data, tx) ? null : 'before starting balance',
   ].filter(Boolean);
 

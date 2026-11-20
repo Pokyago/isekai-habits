@@ -11,6 +11,7 @@ import { isItauStatement, parseItau, type PdfLine } from './itau';
 import { decodeBankFile, parseOfx } from './ofx';
 import { groupLines } from './pdfLines';
 import { planImport } from './statement';
+import { nextCharge, subscriptionTotals, upcomingCharges } from './subscriptions';
 
 const TODAY = '2026-11-20';
 
@@ -281,6 +282,14 @@ describe('bank statement import', () => {
     expect(guessCategory('UBER *TRIP', 'expense')).toBe('transport');
     expect(guessCategory('PAGAMENTO DE SALARIO', 'income')).toBe('salary');
     expect(guessCategory('LOJA XYZ', 'expense')).toBe('other');
+    expect(guessCategory('STEAM PURCHASE', 'expense')).toBe('games');
+    expect(guessCategory('NUUVEM GAMES', 'expense')).toBe('games');
+    expect(guessCategory('AMAZON KINDLE', 'expense')).toBe('books');
+    expect(guessCategory('LIVRARIA CULTURA', 'expense')).toBe('books');
+    expect(guessCategory('PANINI MANGA', 'expense')).toBe('books');
+    expect(guessCategory('AMAZON MARKETPLACE', 'expense')).toBe('shopping');
+    expect(guessCategory('FACEBOOK ADS', 'expense')).toBe('other'); // "book" inside another word
+    expect(guessCategory('CINEMA SHOPPING', 'expense')).toBe('fun');
   });
 
   it('imports once, spots what was already typed in, and keeps identical movements apart', () => {
@@ -469,6 +478,86 @@ describe('Itaú PDF statement', () => {
   });
 });
 
+describe('subscriptions', () => {
+  const sub = (over: Partial<money.SubscriptionInput> = {}): money.SubscriptionInput => ({
+    name: 'Streaming',
+    amount: 5590,
+    cycle: 'monthly',
+    anchor: '2026-11-25',
+    paidWith: 'card',
+    active: true,
+    note: '',
+    ...over,
+  });
+  const addSub = (d: SaveData, over: Partial<money.SubscriptionInput> = {}, now = 5) =>
+    money.saveSubscription(d, sub(over), undefined, TODAY, now);
+
+  it('finds the next charge date for monthly and yearly cycles', () => {
+    const monthly = { anchor: '2026-01-31', cycle: 'monthly' as const };
+    expect(nextCharge(monthly, '2026-01-01')).toBe('2026-01-31'); // nothing before the first charge
+    expect(nextCharge(monthly, '2026-02-01')).toBe('2026-02-28'); // short month: its last day
+    expect(nextCharge(monthly, '2026-02-28')).toBe('2026-02-28');
+    expect(nextCharge(monthly, '2026-03-01')).toBe('2026-03-31');
+    const yearly = { anchor: '2026-03-15', cycle: 'yearly' as const };
+    expect(nextCharge(yearly, TODAY)).toBe('2027-03-15');
+    expect(nextCharge(yearly, '2027-03-15')).toBe('2027-03-15');
+    expect(nextCharge(yearly, '2027-03-16')).toBe('2028-03-15');
+  });
+
+  it('adds up what they cost per month and per year, leaving out cancelled ones', () => {
+    let d = addSub(start(), { amount: 5590 });
+    d = addSub(d, { name: 'Cloud storage', amount: 1290, paidWith: 'bank' }, 6);
+    d = addSub(d, { name: 'Domain', amount: 12000, cycle: 'yearly', anchor: '2027-03-15' }, 7);
+    d = addSub(d, { name: 'Old gym', amount: 9900, active: false }, 8);
+    expect(subscriptionTotals(d)).toEqual({ count: 3, perMonth: 7880, perYear: 94560, onCard: 6590, fromBank: 1290 });
+    expect(upcomingCharges(d, TODAY).map((u) => [u.sub.name, u.date])).toEqual([
+      ['Cloud storage', '2026-11-25'],
+      ['Streaming', '2026-11-25'],
+      ['Domain', '2027-03-15'],
+    ]);
+  });
+
+  it('adds an entry for each charge paid from the bank, and none for ones on the card', () => {
+    let d = addSub(start(100000), { name: 'On card' });
+    d = addSub(d, { name: 'From bank', amount: 2000, paidWith: 'bank' }, 6);
+    expect(Object.keys(money.housekeep(d, '2026-11-24', 10).transactions).length).toBe(0);
+    d = money.housekeep(d, '2027-01-26', 10);
+    const entries = Object.values(d.transactions);
+    expect(entries.map((t) => t.date).sort()).toEqual(['2026-11-25', '2026-12-25', '2027-01-25']);
+    expect(entries.every((t) => t.note === 'From bank' && t.category === 'subscriptions' && t.kind === 'expense')).toBe(true);
+    expect(balance(d, '2027-01-26')).toBe(94000);
+    expect(money.housekeep(d, '2027-01-27', 11)).toBe(d); // nothing new the next day
+  });
+
+  it('charges a yearly one once a year, and nothing from before it was added', () => {
+    // The date given is last year's charge: the next one is what counts.
+    let d = addSub(start(100000), { name: 'Yearly', amount: 30000, cycle: 'yearly', anchor: '2026-02-10', paidWith: 'bank' });
+    expect(Object.keys(money.housekeep(d, '2027-02-09', 10).transactions).length).toBe(0);
+    d = money.housekeep(d, '2028-06-01', 10);
+    expect(Object.values(d.transactions).map((t) => t.date).sort()).toEqual(['2027-02-10', '2028-02-10']);
+  });
+
+  it('stops charging when cancelled or deleted, and a deleted entry stays deleted', () => {
+    let d = addSub(start(), { paidWith: 'bank' });
+    const id = Object.keys(d.subscriptions)[0];
+    d = money.housekeep(d, '2026-11-25', 10);
+    const entry = Object.keys(d.transactions)[0];
+    d = money.deleteTransaction(d, entry, 20);
+    d = money.saveSubscription(d, sub({ paidWith: 'bank', active: false }), id, '2026-11-26', 30);
+    d = money.housekeep(d, '2027-03-01', 40);
+    expect(Object.values(d.transactions).filter((t) => !t.deleted).length).toBe(0);
+    expect(d.subscriptions[id].since).toBe(TODAY); // editing keeps the day it was added
+    expect(subscriptionTotals(money.deleteSubscription(d, id, 50)).count).toBe(0);
+  });
+
+  it('creates the same entry on two devices', () => {
+    const base = addSub(start(), { paidWith: 'bank' });
+    const pc = money.housekeep(base, '2026-11-25', 1000);
+    const ipad = money.housekeep(base, '2026-11-30', 999999);
+    expect(sameSave(pc, ipad)).toBe(true);
+  });
+});
+
 describe('saving and merging', () => {
   it('keeps money records through the save file and merges both devices’ entries', () => {
     const base = start(100000, 50000);
@@ -484,6 +573,7 @@ describe('saving and merging', () => {
   it('opens a save from before money tracking, and refuses one from a newer app', () => {
     const old = JSON.stringify({ version: 1, hero: null, habits: {}, completions: {}, quests: {}, claims: {}, rewards: {}, purchases: {} });
     expect(parseSave(old)).toEqual(emptySave());
-    expect(() => parseSave(JSON.stringify({ version: 3 }))).toThrow(/newer version/);
+    expect(parseSave(JSON.stringify({ version: 2, money: null, transactions: {} }))).toEqual(emptySave());
+    expect(() => parseSave(JSON.stringify({ version: 4 }))).toThrow(/newer version/);
   });
 });

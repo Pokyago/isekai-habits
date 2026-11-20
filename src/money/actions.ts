@@ -7,14 +7,16 @@ import type {
   QuestClaim,
   Recurring,
   SaveData,
+  Subscription,
   Transaction,
   TxKind,
 } from '../data/types';
-import { parseDate } from '../game/dates';
+import { addDays, parseDate } from '../game/dates';
 import { balance, debtRemaining, goalSaved, monthSummary } from './calc';
 import { ADJUSTMENT } from './categories';
 import { addMonths, dayInMonth, monthOf } from './format';
 import type { ImportRow } from './statement';
+import { nextCharge } from './subscriptions';
 
 /*
  * Every change to the money records goes through these functions. Like the game
@@ -156,6 +158,49 @@ export function deleteRecurring(data: SaveData, id: string, now: number): SaveDa
   return { ...data, recurring: { ...data.recurring, [id]: { ...prev, deleted: true, updatedAt: stamp(prev, now) } } };
 }
 
+export interface SubscriptionInput {
+  name: string;
+  amount: number;
+  cycle: 'monthly' | 'yearly';
+  /** A date it is charged on; usually the next one. */
+  anchor: DateStr;
+  paidWith: 'bank' | 'card';
+  active: boolean;
+  note: string;
+}
+
+export function saveSubscription(
+  data: SaveData,
+  input: SubscriptionInput,
+  id: string | undefined,
+  today: DateStr,
+  now: number,
+): SaveData {
+  if (!input.name.trim() || !(input.amount > 0)) return data;
+  const prev = id ? data.subscriptions[id] : undefined;
+  const sub: Subscription = {
+    id: prev?.id ?? newId(),
+    ...input,
+    name: input.name.trim(),
+    note: input.note.trim(),
+    amount: Math.round(input.amount),
+    since: prev?.since ?? today,
+    deleted: false,
+    updatedAt: stamp(prev, now),
+  };
+  return { ...data, subscriptions: { ...data.subscriptions, [sub.id]: sub } };
+}
+
+/** Removes it from the list. Entries it already added stay. */
+export function deleteSubscription(data: SaveData, id: string, now: number): SaveData {
+  const prev = data.subscriptions[id];
+  if (!prev) return data;
+  return {
+    ...data,
+    subscriptions: { ...data.subscriptions, [id]: { ...prev, deleted: true, updatedAt: stamp(prev, now) } },
+  };
+}
+
 export interface GoalInput {
   name: string;
   target: number;
@@ -276,6 +321,40 @@ function addDueRecurring(data: SaveData, today: DateStr): SaveData {
   return transactions === data.transactions ? data : { ...data, transactions };
 }
 
+/**
+ * Adds an entry for each charge that has come due on a subscription paid from the
+ * bank account. Ones on the credit card add nothing: they are already in the card bill.
+ * Like the monthly items, ids are made from the subscription and the period.
+ */
+function addDueSubscriptions(data: SaveData, today: DateStr): SaveData {
+  if (!data.money) return data;
+  let transactions = data.transactions;
+
+  for (const s of Object.values(data.subscriptions)) {
+    if (s.deleted || !s.active || s.paidWith !== 'bank') continue;
+    const from = s.since > data.money.openingDate ? s.since : data.money.openingDate;
+    for (let date = nextCharge(s, from); date <= today; date = nextCharge(s, addDays(date, 1))) {
+      const id = `sub|${s.id}|${s.cycle === 'yearly' ? date.slice(0, 4) : date.slice(0, 7)}`;
+      if (transactions[id]) continue;
+      if (transactions === data.transactions) transactions = { ...transactions };
+      transactions[id] = {
+        id,
+        date,
+        kind: 'expense',
+        amount: s.amount,
+        category: 'subscriptions',
+        note: s.name,
+        goalId: null,
+        debtId: null,
+        source: 'recurring',
+        deleted: false,
+        updatedAt: parseDate(date).getTime(),
+      };
+    }
+  }
+  return transactions === data.transactions ? data : { ...data, transactions };
+}
+
 /** Judges each finished month against the budget, once, a few days after it ends. */
 function settleBudgets(data: SaveData, today: DateStr): SaveData {
   if (!data.money) return data;
@@ -317,5 +396,6 @@ function settleMilestones(data: SaveData, today: DateStr, now: number): SaveData
  */
 export function housekeep(data: SaveData, today: DateStr, now: number): SaveData {
   if (!data.money) return data;
-  return settleMilestones(settleBudgets(addDueRecurring(data, today), today), today, now);
+  const upToDate = addDueSubscriptions(addDueRecurring(data, today), today);
+  return settleMilestones(settleBudgets(upToDate, today), today, now);
 }
