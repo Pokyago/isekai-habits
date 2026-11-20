@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-void: #090b17;
+  --color-panel: #12162c;
+  --color-raise: #1a1f3d;
+  --color-edge: #2a3261;
+  --color-glow: #6fd6ff;
+  --color-gold: #f3c452;
+  --color-ink: #e9ecff;
+  --color-mute: #8e97c2;
+  --color-danger: #ff6b7a;
+  --font-display: Georgia, 'Times New Roman', serif;
+}
+
+:root {
+  --stat-str: #ff7d6e;
+  --stat-vit: #5edb93;
+  --stat-int: #6ea8ff;
+  --stat-spi: #c292ff;
+  --stat-foc: #ffb357;
+  --stat-for: #f1d65a;
+  color-scheme: dark;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 520px at 50% -120px, #1c2458 0%, transparent 65%),
+    var(--color-void);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-glow);
+  outline-offset: 2px;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-toast {
+  animation: toast-in 0.22s ease-out both;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-pop {
+  animation: pop 0.28s ease-out both;
+}
+
+@keyframes level-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+    letter-spacing: 0.6em;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-level {
+  animation: level-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade {
+  animation: fade-in 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-toast,
+  .animate-pop,
+  .animate-level,
+  .animate-fade {
+    animation: none;
+  }
+}
