@@ -69,7 +69,7 @@ describe('the wardrobe', () => {
     delete old.wardrobe;
     old.version = 8;
     const opened = parseSave(JSON.stringify(old));
-    expect(opened.version).toBe(11);
+    expect(opened.version).toBe(12);
     expect(opened.wardrobe).toBeNull();
     expect(outfitOf(opened)).toEqual(STARTER_OUTFIT);
   });

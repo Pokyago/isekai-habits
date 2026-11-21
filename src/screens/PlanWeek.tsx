@@ -1,7 +1,8 @@
-import { ArrowRight, Check, Circle, Plus, Target, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowRight, Check, Circle, Copy, GripVertical, Plus, Repeat, Target, Trash2, Wand2, X } from 'lucide-react';
+import { useMemo, useState, type DragEvent } from 'react';
 import { BossCard, WeekGoalsPanel } from '../components/WeekBits';
 import { Button, Panel, Segmented, inputBase } from '../components/ui';
+import { useFx } from '../data/fx';
 import { WEEKDAY_LABELS } from '../data/meta';
 import { useGame } from '../data/store';
 import type { DateStr } from '../data/types';
@@ -12,12 +13,21 @@ import { useToday } from '../hooks';
 import { formatMoney } from '../money/format';
 import { mealsFor } from '../plan/meals';
 import { moneyDue, planFor } from '../plan/plan';
-import { WEEK_GOALS, WEEK_PLAN_DAYS, WEEK_PLAN_REWARD, weekPlan } from '../plan/week';
+import { WEEK_GOALS, WEEK_PLAN_DAYS, WEEK_PLAN_REWARD, isRepeated, repeats, weekGoals, weekPlan } from '../plan/week';
+import { PlanWizard } from './PlanWizard';
+
+/* What is being dragged between days: a goal ("item:<id>") or a quest ("quest:<id>"). */
+const DRAG_TYPE = 'application/x-isekai-plan';
+const startDrag = (kind: 'item' | 'quest', id: string) => (e: DragEvent) => {
+  e.dataTransfer.setData(DRAG_TYPE, `${kind}:${id}`);
+  e.dataTransfer.effectAllowed = 'move';
+};
 
 /**
  * A whole week at a glance, Monday to Sunday, for planning it in one sitting: the
  * goals for the week, a main goal for each day, and goals and quests spread over the
- * days. Planning it before its Monday is over earns a small reward.
+ * days, by dragging them or with the Move lists. "Plan my week" asks for the same
+ * things one at a time. Planning a week before its Monday is over earns a small reward.
  */
 export function PlanWeek({ onOpenDay }: { onOpenDay(date: DateStr): void }) {
   const data = useGame((s) => s.data);
@@ -27,6 +37,19 @@ export function PlanWeek({ onOpenDay }: { onOpenDay(date: DateStr): void }) {
   const week = which === 'this' ? weekStart(today) : addDays(weekStart(today), 7);
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const plan = useMemo(() => weekPlan(data, week, today), [data, week, today]);
+  const copyLastWeek = useGame((s) => s.copyLastWeek);
+  const deleteRepeat = useGame((s) => s.deleteRepeat);
+  const toast = useFx((s) => s.toast);
+  const [guiding, setGuiding] = useState(false);
+  const everyWeek = useMemo(() => repeats(data), [data]);
+  // Whether the week before has a plan to start from.
+  const before = addDays(week, -7);
+  const canCopy = useMemo(
+    () =>
+      weekGoals(data, before).length > 0 ||
+      Object.values(data.plan).some((p) => !p.deleted && !isRepeated(p) && p.date >= before && p.date <= addDays(before, 6)),
+    [data, before],
+  );
   const last = useMemo(() => weekReview(data, addDays(week, -7), today), [data, week, today]);
   const waiting = Object.values(data.quests)
     .filter((q) => !q.deleted && q.doneDate === null && !(q.plannedFor && q.plannedFor >= today))
@@ -48,6 +71,9 @@ export function PlanWeek({ onOpenDay }: { onOpenDay(date: DateStr): void }) {
             {formatShort(week)} – {formatShort(addDays(week, 6))}
           </p>
         </div>
+        <Button variant="gold" className="ml-auto" onClick={() => setGuiding(true)}>
+          <Wand2 size={16} /> Plan my week
+        </Button>
         <div className="w-full max-w-xs">
           <Segmented<'this' | 'next'>
             label="Week to plan"
@@ -74,6 +100,15 @@ export function PlanWeek({ onOpenDay }: { onOpenDay(date: DateStr): void }) {
                 ? `Do both before ${which === 'this' ? 'today is over' : 'Monday is over'} to earn +${WEEK_PLAN_REWARD.xp} Focus XP and +${WEEK_PLAN_REWARD.gold} gold.`
                 : 'The reward is for a week planned by its Monday. This one can still be planned, and next week’s can earn it.'}
           </p>
+          {canCopy && (
+            <Button
+              variant="ghost"
+              className="mt-2 -ml-2 min-h-9 text-xs"
+              onClick={() => toast(copyLastWeek(week) ? 'Copied the week before onto the same weekdays' : 'Everything from that week is already here', 'info')}
+            >
+              <Copy size={14} /> Start from the week before
+            </Button>
+          )}
           {last.due > 0 && (
             <p className="mt-3 border-t border-edge/60 pt-3 text-xs text-mute">
               The week before: <strong className="text-ink">{Math.round((last.share ?? 0) * 100)}%</strong> of habits kept,{' '}
@@ -96,7 +131,13 @@ export function PlanWeek({ onOpenDay }: { onOpenDay(date: DateStr): void }) {
         <Panel title="Quests not on a day yet" right={<span className="text-xs text-mute">{waiting.length}</span>}>
           <ul className="grid gap-2 md:grid-cols-2">
             {waiting.map((q) => (
-              <li key={q.id} className="flex items-center gap-2 rounded-xl border border-edge bg-raise/70 py-1.5 pr-1.5 pl-3">
+              <li
+                key={q.id}
+                draggable
+                onDragStart={startDrag('quest', q.id)}
+                className="flex cursor-grab items-center gap-2 rounded-xl border border-edge bg-raise/70 py-1.5 pr-1.5 pl-1.5 active:cursor-grabbing"
+              >
+                <GripVertical size={14} className="shrink-0 text-mute/60" aria-hidden />
                 <span className="min-w-0 flex-1 truncate text-sm">{q.title}</span>
                 <MoveTo label={`Put ${q.title} on a day`} text="Put on…" days={days} onPick={(d) => useGame.getState().planQuest(q.id, d)} />
               </li>
@@ -104,9 +145,39 @@ export function PlanWeek({ onOpenDay }: { onOpenDay(date: DateStr): void }) {
           </ul>
         </Panel>
       )}
-      {!Object.values(data.quests).some((q) => !q.deleted && q.doneDate === null) && (
-        <p className="px-1 text-xs text-mute">One-off tasks from your quest log show up here, ready to be put on a day.</p>
+      {everyWeek.length > 0 && (
+        <Panel title="Every week" right={<span className="text-xs text-mute">{everyWeek.length}</span>}>
+          <ul className="grid gap-2 md:grid-cols-2">
+            {everyWeek.map((r) => (
+              <li key={r.id} className="flex items-center gap-2 rounded-xl border border-edge bg-raise/70 py-1 pr-1 pl-3">
+                <Repeat size={14} className="shrink-0 text-mute" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {r.title}
+                  <span className="text-xs text-mute">
+                    {' '}
+                    · every {new Date(2024, 0, 7 + r.weekday).toLocaleDateString(undefined, { weekday: 'long' })}
+                    {r.time ? ` at ${r.time}` : ''}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Stop repeating ${r.title}`}
+                  title="Stop repeating"
+                  onClick={() => deleteRepeat(r.id)}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-mute hover:bg-void/60 hover:text-ink"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Panel>
       )}
+      <p className="px-1 text-xs text-mute">
+        Drag a goal or quest onto another day to move it, or use its Move list. “Plan my week” asks for everything one
+        step at a time.
+      </p>
+      {guiding && <PlanWizard week={week} onClose={() => setGuiding(false)} />}
     </div>
   );
 }
@@ -158,9 +229,34 @@ function DayColumn({ date, days, onOpen }: { date: DateStr; days: DateStr[]; onO
   }
   const [title, setTitle] = useState('');
   const out = money.reduce((n, m) => n + m.amount, 0);
+  // Something is being dragged over this day.
+  const [over, setOver] = useState(false);
 
   return (
-    <li className={`flex min-w-0 flex-col rounded-xl border bg-panel/85 ${isToday ? 'border-glow/60' : 'border-edge'} ${past ? 'opacity-60' : ''}`}>
+    <li
+      onDragOver={(e) => {
+        if (past || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        setOver(false);
+        const dropped = e.dataTransfer.getData(DRAG_TYPE);
+        const cut = dropped.indexOf(':');
+        if (past || cut < 0) return;
+        e.preventDefault();
+        const id = dropped.slice(cut + 1);
+        if (dropped.startsWith('quest:')) planQuest(id, date);
+        else movePlanItem(id, date);
+      }}
+      className={`flex min-w-0 flex-col rounded-xl border bg-panel/85 transition-colors ${
+        over ? 'border-gold bg-gold/10' : isToday ? 'border-glow/60' : 'border-edge'
+      } ${past ? 'opacity-60' : ''}`}
+    >
       <button
         type="button"
         onClick={onOpen}
@@ -209,17 +305,28 @@ function DayColumn({ date, days, onOpen }: { date: DateStr; days: DateStr[]; onO
         {(plan.items.length > 0 || plan.quests.length > 0) && (
           <ul className="space-y-1">
             {plan.items.map((p) => (
-              <li key={p.id} className="flex items-start gap-1.5 rounded-lg bg-raise/60 px-2 py-1.5">
-                <span className={`min-w-0 flex-1 text-xs leading-snug break-words ${p.done ? 'text-mute line-through' : ''}`}>
+              <li
+                key={p.id}
+                draggable={!p.done && !past}
+                onDragStart={startDrag('item', p.id)}
+                className={`flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 rounded-lg bg-raise/60 px-2 py-1.5 ${p.done || past ? '' : 'cursor-grab active:cursor-grabbing'}`}
+              >
+                <span className={`min-w-24 flex-1 text-xs leading-snug break-words ${p.done ? 'text-mute line-through' : ''}`}>
                   {p.time && <strong className="mr-1 text-glow tabular-nums">{p.time}</strong>}
                   {p.title}
+                  {isRepeated(p) && <Repeat size={10} className="ml-1 inline text-mute" aria-label="Every week" />}
                 </span>
                 {!p.done && !past && <MoveTo label={`Move ${p.title} to another day`} text="Move" days={days} skip={date} onPick={(d) => movePlanItem(p.id, d)} />}
               </li>
             ))}
             {plan.quests.map((q) => (
-              <li key={q.id} className="flex items-start gap-1.5 rounded-lg bg-raise/60 px-2 py-1.5">
-                <span className={`min-w-0 flex-1 text-xs leading-snug break-words ${q.doneDate ? 'text-mute line-through' : ''}`}>
+              <li
+                key={q.id}
+                draggable={!q.doneDate && !past}
+                onDragStart={startDrag('quest', q.id)}
+                className={`flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 rounded-lg bg-raise/60 px-2 py-1.5 ${q.doneDate || past ? '' : 'cursor-grab active:cursor-grabbing'}`}
+              >
+                <span className={`min-w-24 flex-1 text-xs leading-snug break-words ${q.doneDate ? 'text-mute line-through' : ''}`}>
                   <span className="mr-1 text-[10px] text-mute uppercase">Quest</span>
                   {q.title}
                 </span>

@@ -8,10 +8,16 @@ import { derive } from '../game/derive';
 import { xpBetween } from '../game/review';
 import { deleteRoutine, routineSteps, routines, saveRoutine } from '../game/routines';
 import { ownedItems, wearItem, buyItem } from '../game/wardrobe';
-import { setHabitChoice, setMainGoal } from './plan';
+import { addPlanItem, planFor, setHabitChoice, setMainGoal, togglePlanItem } from './plan';
 import {
   WEEK_PLAN_REWARD,
+  addRepeat,
+  addRepeats,
   addWeekGoal,
+  copyWeek,
+  deleteRepeat,
+  isRepeated,
+  repeats,
   deleteWeekGoal,
   renameWeekGoal,
   settleWeekPlan,
@@ -84,7 +90,7 @@ describe('goals for the week', () => {
     delete old.weekGoals;
     delete old.routines;
     old.version = 10;
-    expect(parseSave(JSON.stringify(old))).toMatchObject({ version: 11, weekGoals: {}, routines: {} });
+    expect(parseSave(JSON.stringify(old))).toMatchObject({ version: 12, weekGoals: {}, routines: {} });
     const other = addWeekGoal(hero(), TODAY, 'Call mum', TODAY, T0 + 2);
     expect(weekGoals(mergeSaves(d, other), MON)).toHaveLength(2);
   });
@@ -224,5 +230,89 @@ describe('not missing twice', () => {
     d = actions.saveHabit(d, { name: 'Read', category: '', stat: 'str', difficulty: 'easy', schedule: DAILY, target: 1, why: ' ' }, idOf(d, 'Read'), TODAY, T0 + 6);
     expect(Object.values(d.habits)[0].why).toBeUndefined();
     expect(sameSave(parseSave(serializeSave(d)), d)).toBe(true);
+  });
+});
+
+describe('starting a week from the one before', () => {
+  const lastWeek = () => {
+    // Planned from the 9th, a Monday, for that same week.
+    const on = '2026-11-09';
+    let d = hero();
+    d = setMainGoal(d, '2026-11-09', 'Report', on, T0 + 1);
+    d = setMainGoal(d, '2026-11-11', 'Gym', on, T0 + 1);
+    d = addPlanItem(d, '2026-11-09', { title: 'Dentist', time: '09:30' }, T0 + 2, 'a');
+    d = addPlanItem(d, '2026-11-15', { title: 'Call mum', time: null }, T0 + 2, 'b');
+    d = addWeekGoal(d, '2026-11-09', 'Run three times', on, T0 + 3);
+    return d;
+  };
+  const titles = (d: SaveData, date: string) => {
+    const p = planFor(d, date);
+    return [p.main?.title ?? null, ...p.items.map((i) => (i.time ? `${i.time} ${i.title}` : i.title))];
+  };
+
+  it('copies main goals, goals with their times, and the goals for the week, onto the same weekdays', () => {
+    // On Sunday the 15th, planning the week of the 16th.
+    const d = copyWeek(lastWeek(), '2026-11-09', MON, '2026-11-15', T0 + 10);
+    expect(titles(d, '2026-11-16')).toEqual(['Report', '09:30 Dentist']);
+    expect(titles(d, '2026-11-18')).toEqual(['Gym']);
+    expect(titles(d, '2026-11-22')).toEqual([null, 'Call mum']);
+    expect(weekGoals(d, MON).map((g) => g.title)).toEqual(['Run three times']);
+    // Nothing is ticked: it is a fresh week.
+    expect(planFor(d, '2026-11-16').main?.done).toBe(false);
+  });
+
+  it('keeps what the week already has, never doubles up, and leaves days that have passed', () => {
+    let d = lastWeek();
+    d = setMainGoal(d, '2026-11-16', 'My own goal', '2026-11-15', T0 + 5);
+    d = addPlanItem(d, '2026-11-16', { title: 'Dentist', time: null }, T0 + 6, 'c');
+    d = addWeekGoal(d, MON, 'Already here', '2026-11-15', T0 + 7);
+    const once = copyWeek(d, '2026-11-09', MON, '2026-11-15', T0 + 10);
+    expect(titles(once, '2026-11-16')).toEqual(['My own goal', 'Dentist']);
+    expect(weekGoals(once, MON).map((g) => g.title)).toEqual(['Already here']);
+    expect(copyWeek(once, '2026-11-09', MON, '2026-11-15', T0 + 11)).toBe(once);
+
+    // Copied on the Friday: Monday to Thursday have passed.
+    const late = copyWeek(lastWeek(), '2026-11-09', MON, TODAY, T0 + 10);
+    expect(titles(late, '2026-11-16')).toEqual([null]);
+    expect(titles(late, '2026-11-22')).toEqual([null, 'Call mum']);
+  });
+});
+
+describe('goals that repeat on a weekday', () => {
+  it('are put on that weekday for the next two weeks, and again as time goes by', () => {
+    // Tuesdays, made on Friday the 20th.
+    let d = addRepeat(hero(), { title: ' Therapy ', weekday: 2, time: '18:00' }, TODAY, T0 + 1, 'r');
+    expect(repeats(d).map((r) => [r.title, r.weekday, r.time, r.since])).toEqual([['Therapy', 2, '18:00', TODAY]]);
+    const on = (x: SaveData) => Object.values(x.plan).filter((p) => !p.deleted && isRepeated(p)).map((p) => p.date).sort();
+    expect(on(d)).toEqual(['2026-11-24', '2026-12-01']);
+    expect(planFor(d, '2026-11-24').items[0]).toMatchObject({ title: 'Therapy', time: '18:00', done: false });
+    expect(addRepeats(d, TODAY, T0 + 2)).toBe(d);
+    d = addRepeats(d, '2026-11-27', T0 + 3);
+    expect(on(d)).toEqual(['2026-11-24', '2026-12-01', '2026-12-08']);
+  });
+
+  it('stay off a day they were removed from, and stop when the repeat is removed', () => {
+    let d = addRepeat(hero(), { title: 'Therapy', weekday: 2, time: null }, TODAY, T0 + 1, 'r');
+    d = togglePlanItem(d, 'rep|r|2026-11-24', '2026-11-24', T0 + 2);
+    d = deleteRepeat(d, 'r', '2026-11-24', T0 + 3);
+    expect(repeats(d)).toEqual([]);
+    // The one that was done stays; the one still ahead is taken off; nothing new is added.
+    expect(planFor(d, '2026-11-24').items.map((p) => p.done)).toEqual([true]);
+    expect(planFor(d, '2026-12-01').items).toEqual([]);
+    expect(addRepeats(d, '2026-11-30', T0 + 4)).toBe(d);
+  });
+
+  it('are not copied with the week, since they come back by themselves', () => {
+    let d = addRepeat(hero(), { title: 'Therapy', weekday: 2, time: null }, '2026-11-09', T0 + 1, 'r');
+    d = addPlanItem(d, '2026-11-10', { title: 'Buy bread', time: null }, T0 + 2, 'x');
+    d = copyWeek(d, '2026-11-09', MON, '2026-11-15', T0 + 3);
+    expect(planFor(d, '2026-11-17').items.map((p) => p.title).sort()).toEqual(['Buy bread', 'Therapy']);
+  });
+
+  it('survive the save file and merge', () => {
+    const d = addRepeat(hero(), { title: 'Therapy', weekday: 2, time: null }, TODAY, T0 + 1, 'r');
+    expect(sameSave(parseSave(serializeSave(d)), d)).toBe(true);
+    const other = addRepeat(hero(), { title: 'Therapy', weekday: 2, time: null }, TODAY, T0 + 1, 'r');
+    expect(Object.values(mergeSaves(d, other).plan).filter((p) => isRepeated(p))).toHaveLength(2);
   });
 });

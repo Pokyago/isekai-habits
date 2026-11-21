@@ -17,6 +17,7 @@ import * as meals from '../plan/meals';
 import * as plan from '../plan/plan';
 import type { PlanInput } from '../plan/plan';
 import * as week from '../plan/week';
+import type { RepeatInput } from '../plan/week';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
 import * as cards from '../money/cardActions';
@@ -101,6 +102,11 @@ interface GameState {
   renameWeekGoal(id: string, title: string): void;
   toggleWeekGoal(id: string): void;
   deleteWeekGoal(id: string): void;
+  /** Starts a week from the one before it. Returns whether anything was copied. */
+  copyLastWeek(anyDay: DateStr): boolean;
+  /** A goal that comes back on the same weekday every week. */
+  addRepeat(input: RepeatInput): void;
+  deleteRepeat(id: string): void;
   // Routines
   saveRoutine(input: RoutineInput, id?: string): void;
   deleteRoutine(id: string): void;
@@ -163,13 +169,13 @@ export const useGame = create<GameState>((set, get) => {
       } catch (err) {
         console.error('Could not read the saved game', err);
       }
-      set({ data: money.housekeep(data, todayStr(), Date.now()), loaded: true });
+      set({ data: money.housekeep(week.addRepeats(data, todayStr(), Date.now()), todayStr(), Date.now()), loaded: true });
       // Ask the browser not to clear this site's storage when space runs low.
       void navigator.storage?.persist?.().catch(() => undefined);
     },
 
     replaceData(data) {
-      set({ data: money.housekeep(data, todayStr(), Date.now()) });
+      set({ data: money.housekeep(week.addRepeats(data, todayStr(), Date.now()), todayStr(), Date.now()) });
     },
 
     createHero(name, heroClass, templates) {
@@ -363,8 +369,19 @@ export const useGame = create<GameState>((set, get) => {
     deleteRoutine(id) {
       apply((d) => routines.deleteRoutine(d, id, Date.now()));
     },
+    copyLastWeek(anyDay) {
+      const before = get().data;
+      apply((d) => planned(week.copyWeek(d, addDays(anyDay, -7), anyDay, todayStr(), Date.now())), true);
+      return get().data !== before;
+    },
+    addRepeat(input) {
+      apply((d) => week.addRepeat(d, input, todayStr(), Date.now()));
+    },
+    deleteRepeat(id) {
+      apply((d) => week.deleteRepeat(d, id, todayStr(), Date.now()));
+    },
     tick() {
-      applyMoney((d) => d);
+      applyMoney((d) => week.addRepeats(d, todayStr(), Date.now()));
     },
   };
 });

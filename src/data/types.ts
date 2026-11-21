@@ -166,6 +166,24 @@ export interface WeekGoal {
   updatedAt: number;
 }
 
+/**
+ * A goal or appointment that comes back on the same weekday every week, such as therapy
+ * on Tuesdays. It is put on the plan as an ordinary goal, with the id `rep|${id}|${date}`.
+ */
+export interface RepeatGoal {
+  id: string;
+  title: string;
+  /** 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  /** HH:MM, or null when it has no set time. */
+  time: string | null;
+  /** The day it was made. It is only put on days from then on. */
+  since: DateStr;
+  createdAt: number;
+  deleted: boolean;
+  updatedAt: number;
+}
+
 /** A short list of habits done one after another, such as a morning routine. */
 export interface Routine {
   id: string;
@@ -386,7 +404,7 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 11;
+  version: 12;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
@@ -420,4 +438,6 @@ export interface SaveData {
   weekGoals: Record<string, WeekGoal>;
   /** Habits grouped to be done one after another. */
   routines: Record<string, Routine>;
+  /** Goals that come back on the same weekday every week. */
+  repeats: Record<string, RepeatGoal>;
 }

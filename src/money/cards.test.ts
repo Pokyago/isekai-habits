@@ -197,7 +197,7 @@ describe('editing and other records', () => {
     const old = JSON.parse(serializeSave(actions.createHero(emptySave(), 'Tester', 'mage', [], TODAY, T0)));
     delete old.cards;
     old.version = 9;
-    expect(parseSave(JSON.stringify(old))).toMatchObject({ version: 11, cards: {} });
+    expect(parseSave(JSON.stringify(old))).toMatchObject({ version: 12, cards: {} });
 
     const removed = deleteCard(d, s.card, T0 + 80);
     expect(activeCards(removed)).toEqual([]);

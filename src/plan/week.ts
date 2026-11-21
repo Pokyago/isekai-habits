@@ -1,8 +1,8 @@
 import { CLASSES } from '../data/meta';
-import type { DateStr, QuestClaim, SaveData, WeekGoal } from '../data/types';
-import { addDays, weekStart } from '../game/dates';
+import type { DateStr, PlanItem, QuestClaim, RepeatGoal, SaveData, WeekGoal } from '../data/types';
+import { addDays, weekStart, weekday } from '../game/dates';
 import { questReward, type RewardAmount } from '../game/xp';
-import { PLAN_STAT, mainId } from './plan';
+import { PLAN_STAT, addPlanItem, isTime, mainId, planFor, setMainGoal } from './plan';
 
 /*
  * Planning a whole week: up to three goals that belong to the week rather than to a
@@ -111,4 +111,113 @@ export function settleWeekPlan(data: SaveData, anyDay: DateStr, today: DateStr, 
   if (data.claims[id] || !plan.ready || !plan.inTime) return data;
   const claim: QuestClaim = { id, date: today, slot: -1, stat: PLAN_STAT, claimed: true, ...WEEK_PLAN_REWARD, updatedAt: now };
   return { ...data, claims: { ...data.claims, [id]: claim } };
+}
+
+// ---------- copying a week ----------
+
+/**
+ * Starts a week from another one: each day gets the other week's main goal if it has
+ * none, and its goals and appointments unless it already has one by that name. The
+ * week's own goals are copied when it has none. Days that have passed are left alone,
+ * and so is anything that repeats by itself.
+ */
+export function copyWeek(data: SaveData, fromDay: DateStr, toDay: DateStr, today: DateStr, now: number): SaveData {
+  const from = weekStart(fromDay);
+  const to = weekStart(toDay);
+  if (from === to) return data;
+  let next = data;
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(to, i);
+    if (day < today) continue;
+    const source = planFor(data, addDays(from, i));
+    const target = planFor(next, day);
+    if (source.main && !target.main) next = setMainGoal(next, day, source.main.title, today, now);
+    const have = new Set(target.items.map((p) => p.title));
+    for (const p of source.items) {
+      if (isRepeated(p) || have.has(p.title)) continue;
+      next = addPlanItem(next, day, { title: p.title, time: p.time }, now);
+    }
+  }
+  if (weekGoals(next, to).length === 0) {
+    weekGoals(data, from).forEach((g, i) => {
+      next = addWeekGoal(next, to, g.title, today, now + i);
+    });
+  }
+  return next;
+}
+
+// ---------- goals that repeat on a weekday ----------
+
+/** How many days ahead a repeating goal is put on the plan. */
+export const REPEAT_AHEAD = 14;
+
+const repeatedId = (repeatId: string, date: DateStr) => `rep|${repeatId}|${date}`;
+/** Whether something on the plan was put there by a repeating goal. */
+export const isRepeated = (item: Pick<PlanItem, 'id'>): boolean => item.id.startsWith('rep|');
+/** The repeating goal something on the plan came from, or null. */
+export const repeatOf = (item: Pick<PlanItem, 'id'>): string | null => (isRepeated(item) ? item.id.split('|')[1] : null);
+
+/** The repeating goals, Monday first, then by time and name. */
+export function repeats(data: SaveData): RepeatGoal[] {
+  const order = (r: RepeatGoal) => (r.weekday + 6) % 7;
+  return Object.values(data.repeats)
+    .filter((r) => !r.deleted)
+    .sort((a, b) => order(a) - order(b) || (a.time ?? '99').localeCompare(b.time ?? '99') || a.title.localeCompare(b.title));
+}
+
+/**
+ * Puts each repeating goal on its weekday for the next two weeks. The id is made from
+ * the repeating goal and the date, so two devices make the same record, and one that
+ * was removed from a day is not put back.
+ */
+export function addRepeats(data: SaveData, today: DateStr, _now: number): SaveData {
+  let plan = data.plan;
+  for (const r of Object.values(data.repeats)) {
+    if (r.deleted) continue;
+    for (let i = 0; i < REPEAT_AHEAD; i++) {
+      const date = addDays(today, i);
+      if (weekday(date) !== r.weekday || date < r.since) continue;
+      const id = repeatedId(r.id, date);
+      if (plan[id]) continue;
+      if (plan === data.plan) plan = { ...plan };
+      plan[id] = { id, date, title: r.title, main: false, time: r.time, done: false, xp: 0, gold: 0, createdAt: r.createdAt, deleted: false, updatedAt: r.createdAt };
+    }
+  }
+  return plan === data.plan ? data : { ...data, plan };
+}
+
+export interface RepeatInput {
+  title: string;
+  /** 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  time: string | null;
+}
+
+/** Makes a goal that comes back every week on a weekday, and puts it on the days ahead. */
+export function addRepeat(data: SaveData, input: RepeatInput, today: DateStr, now: number, id: string = crypto.randomUUID()): SaveData {
+  const title = input.title.trim();
+  if (title === '' || !(input.weekday >= 0 && input.weekday <= 6)) return data;
+  const repeat: RepeatGoal = {
+    id,
+    title,
+    weekday: Math.round(input.weekday),
+    time: isTime(input.time) ? input.time : null,
+    since: today,
+    createdAt: now,
+    deleted: false,
+    updatedAt: now,
+  };
+  return addRepeats({ ...data, repeats: { ...data.repeats, [id]: repeat } }, today, now);
+}
+
+/** Stops a goal from repeating. What it put on today and the days ahead, and isn't done, is taken off. */
+export function deleteRepeat(data: SaveData, id: string, today: DateStr, now: number): SaveData {
+  const prev = data.repeats[id];
+  if (!prev || prev.deleted) return data;
+  const plan = { ...data.plan };
+  for (const p of Object.values(data.plan)) {
+    if (repeatOf(p) !== id || p.deleted || p.done || p.date < today) continue;
+    plan[p.id] = { ...p, deleted: true, updatedAt: stamp(p, now) };
+  }
+  return { ...data, plan, repeats: { ...data.repeats, [id]: { ...prev, deleted: true, updatedAt: stamp(prev, now) } } };
 }
