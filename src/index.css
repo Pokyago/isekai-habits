@@ -284,3 +284,332 @@ body::after {
     display: none;
   }
 }
+
+/* ---------- the heroine ---------- */
+/* How she moves. The drawing is in components/Heroine.tsx; data-pose is her mood, or 'cheer'. */
+
+.hv {
+  display: block;
+  transition: filter 0.8s ease;
+}
+.hv[data-mood='tired'] {
+  filter: saturate(0.8);
+}
+.hv[data-mood='exhausted'] {
+  filter: saturate(0.5) brightness(0.85);
+}
+.hv[data-pose='cheer'] {
+  filter: none;
+}
+
+.hv-body {
+  transform-origin: 60px 147px;
+}
+.hv-arm,
+.hv-head,
+.hv-ahoge {
+  transition: transform 0.5s ease;
+}
+
+/* Breathing, for the calm moods. */
+@keyframes hv-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--hv-lift, -1.2px));
+  }
+}
+/* Two little hops, then a rest. */
+@keyframes hv-hop {
+  0%,
+  62%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  66% {
+    transform: translateY(0) scale(1.04, 0.95);
+  }
+  73% {
+    transform: translateY(-9px) scale(0.98, 1.03);
+  }
+  80% {
+    transform: translateY(0) scale(1.03, 0.96);
+  }
+  87% {
+    transform: translateY(-6px) scale(0.99, 1.02);
+  }
+  94% {
+    transform: translateY(0) scale(1.02, 0.98);
+  }
+}
+@keyframes hv-sway {
+  0%,
+  100% {
+    transform: translateY(2px) rotate(-1.4deg);
+  }
+  50% {
+    transform: translateY(2px) rotate(1.4deg);
+  }
+}
+@keyframes hv-slump {
+  0%,
+  100% {
+    transform: translateY(5px) scale(1, 0.96);
+  }
+  50% {
+    transform: translateY(5.8px) scale(1.01, 0.95);
+  }
+}
+@keyframes hv-jump {
+  0%,
+  100% {
+    transform: translateY(0) scale(1.04, 0.95);
+  }
+  45% {
+    transform: translateY(-11px) scale(0.98, 1.03);
+  }
+}
+.hv[data-pose='steady'] .hv-body {
+  animation: hv-breathe 4s ease-in-out infinite;
+}
+.hv[data-pose='cheerful'] .hv-body {
+  --hv-lift: -2.2px;
+  animation: hv-breathe 2.6s ease-in-out infinite;
+}
+.hv[data-pose='radiant'] .hv-body {
+  animation: hv-hop 4.8s ease-in-out infinite;
+}
+.hv[data-pose='tired'] .hv-body {
+  animation: hv-sway 6s ease-in-out infinite;
+}
+.hv[data-pose='exhausted'] .hv-body {
+  animation: hv-slump 6s ease-in-out infinite;
+}
+.hv[data-pose='cheer'] .hv-body {
+  animation: hv-jump 0.6s ease-out 3;
+}
+/* In the small round picture only her face shows, so she stays put. */
+.hv[data-portrait] .hv-body {
+  animation: none;
+}
+
+/* Arms: thrown up with the hops, a wave now and then, or hanging. */
+@keyframes hv-arms-l {
+  0%,
+  62%,
+  100% {
+    transform: rotate(4deg);
+  }
+  70%,
+  92% {
+    transform: rotate(128deg);
+  }
+}
+@keyframes hv-arms-r {
+  0%,
+  62%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  70%,
+  92% {
+    transform: rotate(-128deg);
+  }
+}
+@keyframes hv-wave {
+  0%,
+  58%,
+  100% {
+    transform: rotate(0deg);
+  }
+  66% {
+    transform: rotate(-118deg);
+  }
+  72% {
+    transform: rotate(-140deg);
+  }
+  78% {
+    transform: rotate(-116deg);
+  }
+  84% {
+    transform: rotate(-140deg);
+  }
+  90% {
+    transform: rotate(-118deg);
+  }
+}
+.hv[data-pose='radiant'] .hv-arm-l {
+  animation: hv-arms-l 4.8s ease-in-out infinite;
+}
+.hv[data-pose='radiant'] .hv-arm-r {
+  animation: hv-arms-r 4.8s ease-in-out infinite;
+}
+.hv[data-pose='cheerful'] .hv-arm-r {
+  animation: hv-wave 7s ease-in-out infinite;
+}
+.hv[data-pose='cheer'] .hv-arm-l {
+  transform: rotate(128deg);
+}
+.hv[data-pose='cheer'] .hv-arm-r {
+  transform: rotate(-128deg);
+}
+.hv[data-pose='tired'] .hv-arm-l {
+  transform: rotate(-12deg);
+}
+.hv[data-pose='tired'] .hv-arm-r {
+  transform: rotate(12deg);
+}
+.hv[data-pose='exhausted'] .hv-arm-l {
+  transform: rotate(-18deg);
+}
+.hv[data-pose='exhausted'] .hv-arm-r {
+  transform: rotate(18deg);
+}
+
+/* Head and the loose strand of hair. */
+@keyframes hv-tilt {
+  0%,
+  100% {
+    transform: rotate(-2.5deg);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+@keyframes hv-wiggle {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+.hv[data-pose='cheerful'] .hv-head,
+.hv[data-pose='radiant'] .hv-head {
+  animation: hv-tilt 5.2s ease-in-out infinite;
+}
+.hv[data-pose='tired'] .hv-head {
+  transform: translateY(1.5px) rotate(5deg);
+}
+.hv[data-pose='exhausted'] .hv-head {
+  transform: translateY(3px) rotate(9deg);
+}
+.hv[data-pose='cheerful'] .hv-ahoge,
+.hv[data-pose='radiant'] .hv-ahoge,
+.hv[data-pose='cheer'] .hv-ahoge {
+  animation: hv-wiggle 1.6s ease-in-out infinite;
+}
+.hv[data-pose='tired'] .hv-ahoge {
+  transform: rotate(28deg);
+}
+.hv[data-pose='exhausted'] .hv-ahoge {
+  transform: rotate(62deg) scale(0.9);
+}
+
+@keyframes hv-blink {
+  0%,
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+.hv-eyes {
+  animation: hv-blink 5.2s ease-in-out infinite;
+}
+
+/* What floats around her. */
+@keyframes hv-twinkle {
+  0%,
+  100% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1) rotate(45deg);
+    opacity: 1;
+  }
+}
+.hv-sparkle {
+  animation: hv-twinkle 2.4s ease-in-out infinite backwards;
+}
+.hv-sparkle-slow {
+  animation-duration: 4.2s;
+}
+@keyframes hv-drip {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(11px);
+    opacity: 0;
+  }
+}
+.hv-sweat {
+  animation: hv-drip 3s ease-in infinite;
+}
+.hv-tear {
+  animation: hv-drip 2.6s ease-in infinite backwards;
+}
+@keyframes hv-rainfall {
+  from {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-3px, 11px);
+    opacity: 0;
+  }
+}
+.hv-rain {
+  animation: hv-rainfall 1.2s linear infinite backwards;
+}
+@keyframes hv-drift {
+  0%,
+  100% {
+    transform: translateX(-2.5px);
+  }
+  50% {
+    transform: translateX(2.5px);
+  }
+}
+.hv-cloud {
+  animation: hv-drift 7s ease-in-out infinite;
+}
+@keyframes hv-heart-up {
+  0% {
+    transform: translateY(6px) scale(0);
+    opacity: 0;
+  }
+  25% {
+    transform: translateY(0) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-16px) scale(0.9);
+    opacity: 0;
+  }
+}
+.hv-heart {
+  animation: hv-heart-up 1.5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hv,
+  .hv * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .hv-heart {
+    display: none;
+  }
+}

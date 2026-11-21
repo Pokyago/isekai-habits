@@ -104,6 +104,11 @@ export function Settings() {
             Meals: each meal you planned and then tick as eaten is worth as much as a Trivial quest, in Vitality XP.
             A meal that went differently costs nothing.
           </li>
+          <li>
+            Your heroine: her mood is the share of habits you did over the last 7 days, the recent days counting most.
+            A missed day costs her about one mood and a good day wins one back; today only counts in her favour until
+            it is over. She changes nothing about XP, gold or streaks. Click her to see the days she remembers.
+          </li>
         </ul>
       </Panel>
 
