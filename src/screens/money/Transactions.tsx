@@ -1,15 +1,18 @@
-import { ChevronLeft, ChevronRight, CreditCard, FileUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CreditCard, FileUp, Search, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import { Button, Empty, IconButton, Modal, Panel } from '../../components/ui';
+import { BarChart } from '../../components/BarChart';
+import { CHART_COLORS } from '../../components/LineChart';
+import { Button, Empty, IconButton, Modal, Panel, inputBase } from '../../components/ui';
 import { useFx } from '../../data/fx';
 import { useGame } from '../../data/store';
 import type { Transaction } from '../../data/types';
 import { formatLong, formatShort } from '../../game/dates';
 import { activeTransactions, balance, countsInBalance, monthSummary } from '../../money/calc';
 import { categoryName } from '../../money/categories';
-import { addMonths, formatMonth, monthOf } from '../../money/format';
+import { addMonths, formatMonth, formatMonthShort, formatWhole, monthOf } from '../../money/format';
 import { isItauStatement, parseItau } from '../../money/itau';
 import { decodeBankFile, parseOfx } from '../../money/ofx';
+import { searchEntries } from '../../money/search';
 import { planImport, type ImportRow, type Statement } from '../../money/statement';
 import { Stats, useMoney } from './forms';
 
@@ -71,6 +74,9 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ rows: ImportRow[]; statement: Statement } | null>(null);
   const [reading, setReading] = useState(false);
+  // What is being looked up across every entry; empty shows the month as usual.
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length >= 2;
 
   const summary = useMemo(() => monthSummary(data, month), [data, month]);
   const days = useMemo(() => {
@@ -102,6 +108,33 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
+      <div className="relative">
+        <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-mute" aria-hidden />
+        <input
+          type="search"
+          className={`${inputBase} w-full pr-10 pl-9 [&::-webkit-search-cancel-button]:hidden`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+          placeholder="Search all entries: a name, a category, a card, an amount"
+          aria-label="Search all entries"
+        />
+        {query !== '' && (
+          <button
+            type="button"
+            aria-label="Clear the search"
+            onClick={() => setQuery('')}
+            className="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-mute hover:bg-raise hover:text-ink"
+          >
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
+      {searching ? (
+        <SearchResults query={query} onEdit={onEdit} />
+      ) : (
+        <>
       <div className="flex items-center justify-between gap-2">
         <IconButton label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
           <ChevronLeft size={20} />
@@ -159,9 +192,104 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
         on this device and never uploaded. “Money out” is what left the bank. “Spent” leaves out debt payments, savings
         and card bills paid, and counts what you bought on the card.
       </p>
+        </>
+      )}
 
       {pending && <ImportDialog rows={pending.rows} statement={pending.statement} onClose={() => setPending(null)} />}
     </div>
+  );
+}
+
+const SHOWN_AT_FIRST = 100;
+
+/** Everything that matches a search, from all time: what it adds up to, month by month, and each entry. */
+function SearchResults({ query, onEdit }: { query: string; onEdit(tx: Transaction): void }) {
+  const { data, currency, fmt } = useMoney();
+  const result = useMemo(() => searchEntries(data, query), [data, query]);
+  const [showAll, setShowAll] = useState(false);
+
+  if (result.entries.length === 0) {
+    return (
+      <Panel>
+        <Empty>
+          Nothing found for “{query.trim()}”. Try part of the note, a category such as “groceries”, a card’s name, or
+          an amount.
+        </Empty>
+      </Panel>
+    );
+  }
+
+  const shown = showAll ? result.entries : result.entries.slice(0, SHOWN_AT_FIRST);
+  const groups: { month: string; items: Transaction[] }[] = [];
+  for (const tx of shown) {
+    const month = monthOf(tx.date);
+    const last = groups[groups.length - 1];
+    if (last && last.month === month) last.items.push(tx);
+    else groups.push({ month, items: [tx] });
+  }
+  const totals = new Map(result.byMonth.map((m) => [m.month, m.spent]));
+  const active = result.byMonth.filter((m) => m.count > 0);
+  const oneDay = result.first === result.last;
+
+  return (
+    <>
+      <Stats
+        tone="panel"
+        items={[
+          ['Spent in all', fmt(result.spent)],
+          result.income > 0 ? ['Came in', fmt(result.income), 'var(--stat-vit)'] : ['Times', String(result.spentCount)],
+          ['Each time, on average', result.spentCount > 0 ? fmt(Math.round(result.spent / result.spentCount)) : '–'],
+        ]}
+      />
+      <p className="px-1 text-sm text-mute">
+        {result.entries.length} {result.entries.length === 1 ? 'entry' : 'entries'}
+        {oneDay ? ` on ${formatLong(result.first!)}` : `, from ${formatLong(result.first!)} to ${formatLong(result.last!)}`}.
+        {active.length > 1 &&
+          ` Spent in ${active.length} of ${result.byMonth.length} months, about ${fmt(Math.round(result.spent / active.length))} in a month that has any.`}
+        {result.billsPaid > 0 &&
+          ` ${result.billsPaid} card bill ${result.billsPaid === 1 ? 'payment is' : 'payments are'} listed but not counted: what was bought with the card is.`}
+      </p>
+
+      {result.byMonth.length > 1 && (
+        <Panel title="Month by month">
+          <BarChart
+            categories={result.byMonth.map((m) => ({ key: m.month, short: formatMonthShort(m.month), long: formatMonth(m.month) }))}
+            series={[{ name: 'Spent', color: CHART_COLORS[0], values: result.byMonth.map((m) => m.spent / 100) }]}
+            format={(v) => formatWhole(Math.round(v * 100), currency)}
+            formatValue={(v) => fmt(Math.round(v * 100))}
+            axisWidth={64}
+            height={220}
+            label={`What was spent on “${query.trim()}” in each month`}
+          />
+        </Panel>
+      )}
+
+      <Panel title="Entries found" right={<span className="text-xs text-mute tabular-nums">{result.entries.length}</span>}>
+        <div className="space-y-3">
+          {groups.map((g) => (
+            <section key={g.month}>
+              <h3 className="flex items-baseline justify-between gap-3 px-2 text-[11px] font-semibold tracking-wide text-mute uppercase">
+                <span>{formatMonth(g.month)}</span>
+                {(totals.get(g.month) ?? 0) > 0 && <span className="tabular-nums">{fmt(totals.get(g.month)!)}</span>}
+              </h3>
+              {g.items.map((tx) => (
+                <div key={tx.id} className="flex items-center">
+                  <span className="w-14 shrink-0 pl-2 text-xs text-mute tabular-nums">{formatShort(tx.date)}</span>
+                  <div className="min-w-0 flex-1">
+                    <TxRow tx={tx} onEdit={onEdit} />
+                  </div>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+        {!showAll && result.entries.length > SHOWN_AT_FIRST && (
+          <Button variant="ghost" className="mt-3 w-full" onClick={() => setShowAll(true)}>
+            Show all {result.entries.length}
+          </Button>
+        )}
+      </Panel>
+    </>
   );
 }
 
