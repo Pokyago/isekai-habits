@@ -5,6 +5,7 @@ import { Button, Empty, Field, Modal, Panel, Segmented, inputClass } from '../..
 import { useGame } from '../../data/store';
 import type { Subscription } from '../../data/types';
 import { daysBetween, formatLong, formatShort } from '../../game/dates';
+import { activeCards } from '../../money/cards';
 import { EXPENSE_CATEGORIES, NOT_SPENDING, categoryName, guessCategory } from '../../money/categories';
 import { amountText, parseAmount } from '../../money/format';
 import {
@@ -182,9 +183,9 @@ export function MonthlyExpenses() {
         <Charges type="bill" />
       </div>
       <p className="max-w-3xl text-xs text-mute">
-        Only the ones set to “Bank: add the entry” put an entry in your account on their day. The others, and
-        everything with no set day, are just listed here, so nothing is counted twice with your card bill or an
-        imported statement.
+        The ones set to “Bank: add the entry” put an entry in your account on their day, and the ones on a credit
+        card you have added go on that card’s bill. The others, and everything with no set day, are just listed
+        here, so nothing is counted twice with an imported statement.
       </p>
     </div>
   );
@@ -349,7 +350,8 @@ function Charges({ type }: { type: ChargeType }) {
 }
 
 function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscription; onClose(): void }) {
-  const { today, currency } = useMoney();
+  const { data, today, currency } = useMoney();
+  const cards = useMemo(() => activeCards(data), [data]);
   const saveSubscription = useGame((s) => s.saveSubscription);
   const deleteSubscription = useGame((s) => s.deleteSubscription);
   const words = WORDS[type];
@@ -375,6 +377,9 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
   const next = valid && !floating ? nextCharge({ anchor, cycle }, today) : null;
   // With no day to add an entry on, it can only be tracked.
   const paid = floating && paidWith === 'bank' ? 'manual' : paidWith;
+  // For one on a credit card: the card whose bill it goes on, or 'none' to only track it.
+  const [cardPick, setCardPick] = useState(sub?.cardId ?? cards[0]?.id ?? 'none');
+  const billCard = paid === 'card' && !floating && cardPick !== 'none' ? data.cards[cardPick] : undefined;
 
   return (
     <Modal title={sub ? words.editTitle : words.newTitle} onClose={onClose}>
@@ -384,7 +389,18 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
           e.preventDefault();
           if (!valid) return;
           saveSubscription(
-            { name, amount: amount!, cycle, anchor, floating, paidWith: paid, active, note, ...(isBill ? { type: 'bill' as const, category } : {}) },
+            {
+              name,
+              amount: amount!,
+              cycle,
+              anchor,
+              floating,
+              paidWith: paid,
+              cardId: paid === 'card' && (cards.length > 0 || sub?.cardId) ? cardPick : null,
+              active,
+              note,
+              ...(isBill ? { type: 'bill' as const, category } : {}),
+            },
             sub?.id,
           );
           onClose();
@@ -474,9 +490,33 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
               ...(floating ? [] : [{ value: 'bank' as const, label: 'Bank: add the entry' }]),
             ]}
           />
+          {paid === 'card' && !floating && (cards.length > 0 || sub?.cardId) && (
+            <select
+              className={`${inputClass} mt-2`}
+              aria-label="Which card’s bill it goes on"
+              value={cardPick}
+              onChange={(e) => setCardPick(e.target.value)}
+            >
+              {cards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  On the bill of {c.name}
+                </option>
+              ))}
+              {cardPick !== 'none' && !cards.some((c) => c.id === cardPick) && (
+                <option value={cardPick}>On the bill of {data.cards[cardPick]?.name ?? 'a card'} (removed)</option>
+              )}
+              <option value="none">Don’t put it on a bill: just track it</option>
+            </select>
+          )}
           <p className="mt-1.5 text-xs text-mute">
             {paid === 'card'
-              ? 'Only tracked here. The charge is already inside your card bill, so no entry is added.'
+              ? billCard && !billCard.deleted
+                ? `It is put on ${billCard.name}’s bill on each date it is charged, starting with the next one, and counts as spending that day.`
+                : floating && cards.length > 0
+                  ? 'Only tracked here. With no set day it can’t be put on a bill by itself; it is part of what you pay as “Not itemised”.'
+                  : cards.length > 0
+                    ? 'Only tracked here. It is part of what you pay on the card’s bill as “Not itemised”.'
+                    : 'Only tracked here. The charge is already inside your card bill, so no entry is added.'
               : paid === 'manual'
                 ? floating
                   ? 'Only tracked here. Record the payment yourself when you make it, or let it come in with your bank statement.'

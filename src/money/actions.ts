@@ -13,7 +13,7 @@ import type {
 } from '../data/types';
 import { addDays, parseDate } from '../game/dates';
 import { balance, debtRemaining, goalSaved, monthSummary } from './calc';
-import { billFor } from './cards';
+import { activeCards, billFor } from './cards';
 import { ADJUSTMENT } from './categories';
 import { addMonths, dayInMonth, monthOf } from './format';
 import type { ImportRow } from './statement';
@@ -186,6 +186,8 @@ export interface SubscriptionInput {
   /** Paid at some point in the month or year, with no set day. */
   floating?: boolean;
   paidWith: 'bank' | 'card' | 'manual';
+  /** When paid with a credit card: the card whose bill each charge goes on, or 'none' to only track it. */
+  cardId?: string | null;
   active: boolean;
   note: string;
   /** 'bill' for a monthly bill; leave out for a subscription. */
@@ -202,10 +204,18 @@ export function saveSubscription(
 ): SaveData {
   if (!input.name.trim() || !(input.amount > 0)) return data;
   const prev = id ? data.subscriptions[id] : undefined;
-  const { floating, ...rest } = input;
+  const { floating, cardId, ...rest } = input;
+  // Tied to a card: charges are put on its bills from the day it was tied, never for the time before.
+  const onCard =
+    rest.paidWith === 'card' && cardId
+      ? cardId === 'none'
+        ? { cardId }
+        : { cardId, cardSince: prev?.cardId === cardId && prev.cardSince ? prev.cardSince : today }
+      : {};
   const sub: Subscription = {
     id: prev?.id ?? newId(),
     ...rest,
+    ...onCard,
     // Without a day there is no day to add an entry on: it can only be tracked.
     ...(floating ? { floating: true as const, paidWith: rest.paidWith === 'bank' ? ('manual' as const) : rest.paidWith } : {}),
     // What kind of thing it is never changes after it is added.
@@ -351,17 +361,35 @@ function addDueRecurring(data: SaveData, today: DateStr): SaveData {
 }
 
 /**
- * Adds an entry for each charge that has come due on a subscription paid from the
- * bank account. Ones on the credit card add nothing: they are already in the card bill.
- * Like the monthly items, ids are made from the subscription and the period.
+ * With a single credit card there is no doubt which one a card subscription is on: it is
+ * tied to it, from today. With several, each is tied by hand in its form.
+ */
+function tieCardSubscriptions(data: SaveData, today: DateStr, now: number): SaveData {
+  const cards = activeCards(data);
+  if (cards.length !== 1) return data;
+  let subscriptions = data.subscriptions;
+  for (const s of Object.values(data.subscriptions)) {
+    if (s.deleted || !s.active || s.paidWith !== 'card' || s.cardId) continue;
+    if (subscriptions === data.subscriptions) subscriptions = { ...subscriptions };
+    subscriptions[s.id] = { ...s, cardId: cards[0].id, cardSince: today, updatedAt: stamp(s, now) };
+  }
+  return subscriptions === data.subscriptions ? data : { ...data, subscriptions };
+}
+
+/**
+ * Adds an entry for each charge that has come due: for a subscription paid from the
+ * bank account, an entry that leaves the bank; for one tied to a credit card, a purchase
+ * on that card's bill. Like the monthly items, ids are made from the subscription and the period.
  */
 function addDueSubscriptions(data: SaveData, today: DateStr): SaveData {
   if (!data.money) return data;
   let transactions = data.transactions;
 
   for (const s of Object.values(data.subscriptions)) {
-    if (s.deleted || !s.active || s.paidWith !== 'bank' || isFloating(s)) continue;
-    const from = s.since > data.money.openingDate ? s.since : data.money.openingDate;
+    if (s.deleted || !s.active || isFloating(s)) continue;
+    const card = s.paidWith === 'card' && s.cardId && s.cardSince ? data.cards[s.cardId] : undefined;
+    if (s.paidWith === 'card' ? !card || card.deleted : s.paidWith !== 'bank') continue;
+    const from = card ? s.cardSince! : s.since > data.money.openingDate ? s.since : data.money.openingDate;
     for (let date = nextCharge(s, from); date <= today; date = nextCharge(s, addDays(date, 1))) {
       const id = `sub|${s.id}|${s.cycle === 'yearly' ? date.slice(0, 4) : date.slice(0, 7)}`;
       if (transactions[id]) continue;
@@ -376,6 +404,7 @@ function addDueSubscriptions(data: SaveData, today: DateStr): SaveData {
         goalId: null,
         debtId: null,
         source: 'recurring',
+        ...(card ? { cardId: card.id, bill: billFor(card, date) } : {}),
         deleted: false,
         updatedAt: parseDate(date).getTime(),
       };
@@ -425,6 +454,6 @@ function settleMilestones(data: SaveData, today: DateStr, now: number): SaveData
  */
 export function housekeep(data: SaveData, today: DateStr, now: number): SaveData {
   if (!data.money) return data;
-  const upToDate = addDueSubscriptions(addDueRecurring(data, today), today);
+  const upToDate = addDueSubscriptions(addDueRecurring(tieCardSubscriptions(data, today, now), today), today);
   return settleMilestones(settleBudgets(upToDate, today), today, now);
 }

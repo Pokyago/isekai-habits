@@ -313,6 +313,13 @@ export interface Subscription {
    * 'manual': paid from the bank account but tracked only; the entry is recorded by hand or comes in with a statement.
    */
   paidWith: 'bank' | 'card' | 'manual';
+  /**
+   * For one charged to a credit card: the card whose bill each charge is put on, or
+   * 'none' to only track it. Left out until a card is chosen (or there is only one).
+   */
+  cardId?: string;
+  /** The day it was tied to that card. Charges from then on are put on the card's bills. */
+  cardSince?: DateStr;
   /** False once cancelled or paused: kept in the list but not counted or charged. */
   active: boolean;
   note: string;

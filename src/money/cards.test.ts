@@ -211,3 +211,92 @@ describe('editing and other records', () => {
     expect(cardSummary(merged, cardOf(merged), TODAY).owed).toBe(27_000);
   });
 });
+
+describe('subscriptions charged to the card', () => {
+  const sub = (over: Partial<money.SubscriptionInput> = {}): money.SubscriptionInput => ({
+    name: 'Netflix',
+    amount: 5_590,
+    cycle: 'monthly',
+    anchor: '2026-11-25',
+    paidWith: 'card',
+    active: true,
+    note: '',
+    ...over,
+  });
+  const onCard = (d: SaveData) => Object.values(d.transactions).filter((t) => t.cardId && !t.deleted).sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  it('go on the bill by themselves on each date, from the day they are tied to the card', () => {
+    const s = start();
+    let d = money.saveSubscription(s.d, sub({ cardId: s.card }), undefined, TODAY, T0 + 10);
+    expect(Object.values(d.subscriptions)[0]).toMatchObject({ cardId: s.card, cardSince: TODAY });
+
+    // Nothing yet: the next charge is on the 25th.
+    expect(onCard(money.housekeep(d, TODAY, T0 + 20))).toEqual([]);
+    d = money.housekeep(d, '2027-01-10', T0 + 30);
+    expect(onCard(d).map((t) => [t.date, t.bill, t.amount, t.category, t.note, t.source])).toEqual([
+      ['2026-11-25', '2026-12', 5_590, 'subscriptions', 'Netflix', 'recurring'],
+      ['2026-12-25', '2027-01', 5_590, 'subscriptions', 'Netflix', 'recurring'],
+    ]);
+    // Spending when charged, and nothing out of the bank.
+    expect(balance(d, '2027-01-10')).toBe(500_000);
+    expect(monthSummary(d, '2026-11')).toMatchObject({ spent: 5_590, out: 0 });
+    expect(billOf(d, cardOf(d), '2026-12', '2027-01-10').total).toBe(5_590);
+
+    // Running it again adds nothing, and one that was deleted stays deleted.
+    expect(money.housekeep(d, '2027-01-10', T0 + 40)).toBe(d);
+    const first = onCard(d)[0].id;
+    const removed = money.housekeep(money.deleteTransaction(d, first, T0 + 50), '2027-01-10', T0 + 60);
+    expect(onCard(removed).map((t) => t.date)).toEqual(['2026-12-25']);
+  });
+
+  it('are tied to the card by themselves when there is only one card', () => {
+    // A subscription from before the card existed.
+    let d = actions.createHero(emptySave(), 'Tester', 'mage', [], '2026-11-01', T0);
+    d = money.setupMoney(d, 500_000, null, 'BRL', '2026-11-01', T0);
+    d = money.saveSubscription(d, sub({ anchor: '2026-11-05' }), undefined, '2026-11-02', T0 + 1);
+    d = money.housekeep(d, TODAY, T0 + 2);
+    expect(Object.values(d.subscriptions)[0].cardId).toBeUndefined();
+    expect(onCard(d)).toEqual([]);
+
+    d = saveCard(d, { name: 'Itaú', closingDay: 3, dueDay: 10, limit: null }, undefined, T0 + 3);
+    d = money.housekeep(d, TODAY, T0 + 4);
+    expect(Object.values(d.subscriptions)[0]).toMatchObject({ cardSince: TODAY });
+    // The charge of November 5th was before it was tied: only the ones after are added.
+    d = money.housekeep(d, '2026-12-06', T0 + 5);
+    expect(onCard(d).map((t) => t.date)).toEqual(['2026-12-05']);
+  });
+
+  it('are left alone with two cards, when set to just track, with no set day, or once the card is gone', () => {
+    const s = start();
+    let two = saveCard(s.d, { name: 'Nubank', closingDay: 20, dueDay: 27, limit: null }, undefined, T0 + 1);
+    two = money.saveSubscription(two, sub(), undefined, TODAY, T0 + 2);
+    two = money.housekeep(two, '2026-12-30', T0 + 3);
+    expect(Object.values(two.subscriptions)[0].cardId).toBeUndefined();
+    expect(onCard(two)).toEqual([]);
+
+    let none = money.saveSubscription(s.d, sub({ cardId: 'none' }), undefined, TODAY, T0 + 2);
+    none = money.housekeep(none, '2026-12-30', T0 + 3);
+    expect(Object.values(none.subscriptions)[0]).toMatchObject({ cardId: 'none' });
+    expect(onCard(none)).toEqual([]);
+
+    let loose = money.saveSubscription(s.d, sub({ cardId: s.card, floating: true }), undefined, TODAY, T0 + 2);
+    loose = money.housekeep(loose, '2026-12-30', T0 + 3);
+    expect(onCard(loose)).toEqual([]);
+
+    let gone = money.saveSubscription(s.d, sub({ cardId: s.card }), undefined, TODAY, T0 + 2);
+    gone = money.housekeep(deleteCard(gone, s.card, T0 + 3), '2026-12-30', T0 + 4);
+    expect(onCard(gone)).toEqual([]);
+  });
+
+  it('keep the day they were tied when edited, and stop when moved off the card', () => {
+    const s = start();
+    let d = money.saveSubscription(s.d, sub({ cardId: s.card }), undefined, TODAY, T0 + 2);
+    const id = Object.keys(d.subscriptions)[0];
+    d = money.saveSubscription(d, sub({ cardId: s.card, amount: 6_000 }), id, '2026-12-01', T0 + 3);
+    expect(d.subscriptions[id]).toMatchObject({ cardSince: TODAY, amount: 6_000 });
+
+    d = money.saveSubscription(d, sub({ paidWith: 'manual', cardId: null }), id, '2026-12-01', T0 + 4);
+    expect(d.subscriptions[id].cardId).toBeUndefined();
+    expect(onCard(money.housekeep(d, '2026-12-30', T0 + 5)).map((t) => t.date)).toEqual([]);
+  });
+});

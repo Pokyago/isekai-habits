@@ -259,7 +259,7 @@ export const useGame = create<GameState>((set, get) => {
       applyMoney((d) => money.deleteDebt(d, id, Date.now()));
     },
     saveCard(input, id) {
-      apply((d) => cards.saveCard(d, input, id, Date.now()));
+      applyMoney((d) => cards.saveCard(d, input, id, Date.now()));
     },
     deleteCard(id) {
       apply((d) => cards.deleteCard(d, id, Date.now()));
