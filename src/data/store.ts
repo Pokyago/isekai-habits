@@ -71,7 +71,8 @@ interface GameState {
   addPurchase(input: PurchaseInput): void;
   /** Removes every part of a purchase made in instalments. */
   deletePlan(planId: string): void;
-  payBill(cardId: string, month: MonthStr, amount: number, date: DateStr): void;
+  /** Pays one or more of a card's bills from the bank account, oldest first. */
+  payBills(cardId: string, months: MonthStr[], amount: number, date: DateStr): void;
   // Health
   saveCheckIn(input: CheckInInput): void;
   deleteCheckIn(id: string): void;
@@ -270,8 +271,8 @@ export const useGame = create<GameState>((set, get) => {
     deletePlan(planId) {
       applyMoney((d) => cards.deletePlan(d, planId, Date.now()));
     },
-    payBill(cardId, month, amount, date) {
-      applyMoney((d) => cards.payBill(d, cardId, month, amount, date, todayStr(), Date.now()));
+    payBills(cardId, months, amount, date) {
+      applyMoney((d) => cards.payBills(d, cardId, months, amount, date, todayStr(), Date.now()));
     },
     importRows(rows) {
       applyMoney((d) => money.importRows(d, rows, todayStr(), Date.now()));

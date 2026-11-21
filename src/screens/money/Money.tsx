@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Landmark, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Bar, Button, Empty, Field, Panel, Segmented, inputClass } from '../../components/ui';
 import { useGame } from '../../data/store';
@@ -12,7 +12,7 @@ import { categoryName } from '../../money/categories';
 import { CURRENCIES, DEFAULT_CURRENCY, formatMonth, monthOf, parseAmount } from '../../money/format';
 import { fixedCosts, upcomingCharges } from '../../money/subscriptions';
 import { AmountInput, BalanceForm, BudgetForm, Stats, TransactionForm, useMoney } from './forms';
-import { CreditCards } from './Cards';
+import { CreditCards, PayCardForm } from './Cards';
 import { Charts } from './Charts';
 import { DebtList, GoalList, Plans } from './Plans';
 import { FixedCosts, MonthlyExpenses, inDays } from './Subscriptions';
@@ -22,6 +22,8 @@ type View = 'overview' | 'entries' | 'charts' | 'plans' | 'expenses' | 'card';
 
 export function Money() {
   const hasMoney = useGame((s) => s.data.money !== null);
+  const hasCard = useGame((s) => Object.values(s.data.cards).some((c) => !c.deleted));
+  const [paying, setPaying] = useState(false);
   const [view, setView] = useState<View>('overview');
   // What the entry form is showing: a new entry (maybe prefilled), an existing one, or nothing.
   const [form, setForm] = useState<{ tx?: Transaction; initial?: Partial<TxInput> } | null>(null);
@@ -35,9 +37,16 @@ export function Money() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold">Money</h1>
-        <Button variant="gold" onClick={() => add()}>
-          <Plus size={16} /> Add entry
-        </Button>
+        <div className="flex gap-2">
+          {hasCard && (
+            <Button variant="primary" onClick={() => setPaying(true)}>
+              <Landmark size={16} /> Pay card
+            </Button>
+          )}
+          <Button variant="gold" onClick={() => add()}>
+            <Plus size={16} /> Add entry
+          </Button>
+        </div>
       </div>
       <div className="max-w-5xl">
       <Segmented<View>
@@ -65,6 +74,7 @@ export function Money() {
       {view === 'card' && <CreditCards onAdd={add} onEdit={edit} />}
 
       {form && <TransactionForm tx={form.tx} initial={form.initial} onClose={() => setForm(null)} />}
+      {paying && <PayCardForm onClose={() => setPaying(false)} />}
     </div>
   );
 }

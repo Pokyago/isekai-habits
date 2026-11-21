@@ -5,7 +5,7 @@ import type { SaveData } from '../data/types';
 import { weekReview } from '../game/review';
 import { moneyDue } from '../plan/plan';
 import * as money from './actions';
-import { addPurchase, deleteCard, deletePlan, payBill, saveCard } from './cardActions';
+import { addPurchase, deleteCard, deletePlan, payBill, payBills, saveCard } from './cardActions';
 import { activeCards, billDates, billFor, billOf, billsToPay, cardSummary, cardsOwed, instalments } from './cards';
 import { balance, budgetStatus, monthSummary } from './calc';
 import { planImport } from './statement';
@@ -298,5 +298,50 @@ describe('subscriptions charged to the card', () => {
     d = money.saveSubscription(d, sub({ paidWith: 'manual', cardId: null }), id, '2026-12-01', T0 + 4);
     expect(d.subscriptions[id].cardId).toBeUndefined();
     expect(onCard(money.housekeep(d, '2026-12-30', T0 + 5)).map((t) => t.date)).toEqual([]);
+  });
+});
+
+describe('paying the card in one go', () => {
+  // A bill that has closed (due December 10th) and the one that is open after it, looked at on December 5th.
+  const ON = '2026-12-05';
+  const two = () => {
+    const s = start();
+    let d = buy(s.d, s.card, '2026-11-05', 30_000);
+    d = buy(d, s.card, '2026-12-04', 12_000);
+    return { d, card: s.card };
+  };
+
+  it('pays every bill so far, oldest first, and takes the whole amount from the bank', () => {
+    const s = two();
+    expect(cardSummary(s.d, cardOf(s.d), ON)).toMatchObject({ owedNow: 42_000 });
+    const d = payBills(s.d, s.card, ['2027-01', '2026-12'], 42_000, ON, ON, T0 + 30);
+    expect(balance(d, ON)).toBe(458_000);
+    expect(billOf(d, cardOf(d), '2026-12', ON)).toMatchObject({ paid: 30_000, status: 'paid' });
+    expect(billOf(d, cardOf(d), '2027-01', ON)).toMatchObject({ paid: 12_000, status: 'paid' });
+    expect(cardsOwed(d, ON)).toEqual({ now: 0, later: 0 });
+    // Money left the bank in December; none of it is spending again.
+    expect(monthSummary(d, '2026-12')).toMatchObject({ out: 42_000, spent: 12_000 });
+  });
+
+  it('leaves the newest bill owed when less is paid, and puts any extra on it when more is', () => {
+    const s = two();
+    const less = payBills(s.d, s.card, ['2026-12', '2027-01'], 35_000, ON, ON, T0 + 30);
+    expect(billOf(less, cardOf(less), '2026-12', ON).left).toBe(0);
+    expect(billOf(less, cardOf(less), '2027-01', ON)).toMatchObject({ paid: 5_000, left: 7_000 });
+    expect(balance(less, ON)).toBe(465_000);
+
+    const more = payBills(s.d, s.card, ['2026-12', '2027-01'], 50_000, ON, ON, T0 + 30);
+    const open = billOf(more, cardOf(more), '2027-01', ON);
+    expect(open).toMatchObject({ total: 20_000, paid: 20_000, status: 'paid' });
+    expect(open.purchases.find((p) => p.note === 'Not itemised')?.amount).toBe(8_000);
+    expect(balance(more, ON)).toBe(450_000);
+  });
+
+  it('with a single bill is the same as paying that bill', () => {
+    const s = two();
+    const d = payBills(s.d, s.card, ['2026-12'], 30_000, ON, ON, T0 + 30);
+    expect(billOf(d, cardOf(d), '2026-12', ON).status).toBe('paid');
+    expect(billOf(d, cardOf(d), '2027-01', ON).left).toBe(12_000);
+    expect(balance(d, ON)).toBe(470_000);
   });
 });

@@ -160,3 +160,32 @@ export function payBill(
   };
   return ledgerReward({ ...data, transactions }, today, now);
 }
+
+/**
+ * Pays several bills of a card in one go, oldest first, each getting what is left on it.
+ * The last one takes whatever remains of the amount, so paying more than was written
+ * down ends up on it as "not itemised", and paying less leaves the later ones owed.
+ */
+export function payBills(
+  data: SaveData,
+  cardId: string,
+  months: MonthStr[],
+  amount: number,
+  date: DateStr,
+  today: DateStr,
+  now: number,
+): SaveData {
+  const card = data.cards[cardId];
+  if (!card) return data;
+  const order = [...new Set(months)].sort();
+  let left = Math.round(amount);
+  let next = data;
+  order.forEach((month, i) => {
+    const last = i === order.length - 1;
+    const pay = last ? left : Math.min(left, billOf(next, card, month, today).left);
+    if (pay <= 0) return;
+    next = payBill(next, cardId, month, pay, date, today, now + i);
+    left -= pay;
+  });
+  return next;
+}
