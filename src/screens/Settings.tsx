@@ -7,6 +7,7 @@ import { Button, Modal, Panel, inputClass } from '../components/ui';
 import { useFx } from '../data/fx';
 import { SHIELD_COST } from '../data/meta';
 import { useGame } from '../data/store';
+import { PLAN_PAGE } from '../features';
 import { HEALTH_REWARD, SLEEP_REWARD } from '../health/health';
 import { useToday } from '../hooks';
 import { BUDGET_GRACE_DAYS, BUDGET_REWARD, LEDGER_REWARD, MILESTONE_REWARD } from '../money/actions';
@@ -107,21 +108,27 @@ export function Settings() {
             gold, and logging last night’s sleep gives +{SLEEP_REWARD.xp} XP and +{SLEEP_REWARD.gold} gold. Nothing depends on
             what the numbers are.
           </li>
+          {/* These two are about the Plan page, which is switched off for now (see features.ts). */}
+          {PLAN_PAGE && (
+            <li>
+              Planning: setting tomorrow’s main goal the day before gives +{PLAN_AHEAD_REWARD.xp} Focus XP. Achieving a
+              day’s main goal is worth as much as a Medium quest, and each of the first {REWARDED_GOALS} other goals
+              you finish that day as much as an Easy one. Nothing is lost for a goal left undone; it can be moved to
+              another day.
+            </li>
+          )}
+          {PLAN_PAGE && (
+            <li>
+              On the Plan page, a habit skipped for a day is passed over: that day neither adds to its streak nor
+              breaks it, and it doesn’t count against a flawless day. A habit added for one day only adds to its streak
+              if you do it and costs nothing if you don’t. Picking a habit as a priority only changes where it is
+              listed.
+            </li>
+          )}
           <li>
-            Planning: setting tomorrow’s main goal the day before gives +{PLAN_AHEAD_REWARD.xp} Focus XP. Achieving a
-            day’s main goal is worth as much as a Medium quest, and each of the first {REWARDED_GOALS} other goals you
-            finish that day as much as an Easy one. Nothing is lost for a goal left undone; it can be moved to another
-            day.
-          </li>
-          <li>
-            On the Plan page, a habit skipped for a day is passed over: that day neither adds to its streak nor breaks
-            it, and it doesn’t count against a flawless day. A habit added for one day only adds to its streak if you
-            do it and costs nothing if you don’t. Picking a habit as a priority only changes where it is listed.
-          </li>
-          <li>
-            The week: up to three goals for the week, each worth as much as a Medium quest in Focus XP. Planning a week
-            before its Monday is over (a goal for the week and a main goal on at least three days) earns +30 Focus XP
-            and +15 gold.
+            The week: up to three goals for the week, each worth as much as a Medium quest in Focus XP.
+            {PLAN_PAGE &&
+              ' Planning a week before its Monday is over (a goal for the week and a main goal on at least three days) earns +30 Focus XP and +15 gold.'}
           </li>
           <li>
             Weekly boss: each habit you do in a week hurts it: Trivial 1, Easy 2, Medium 3, Hard 5. It has 70% of
@@ -131,10 +138,12 @@ export function Settings() {
           <li>
             Routines only put your habits in an order to run through; they earn nothing of their own.
           </li>
-          <li>
-            Meals: each meal you planned and then tick as eaten is worth as much as a Trivial quest, in Vitality XP.
-            A meal that went differently costs nothing.
-          </li>
+          {PLAN_PAGE && (
+            <li>
+              Meals: each meal you planned and then tick as eaten is worth as much as a Trivial quest, in Vitality XP.
+              A meal that went differently costs nothing.
+            </li>
+          )}
           <li>
             Your heroine: her mood is the share of habits you did over the last 7 days, the recent days counting most.
             A missed day costs her about one mood and a good day wins one back; today only counts in her favour until

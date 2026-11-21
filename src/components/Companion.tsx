@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CLASSES, WEEKDAY_LABELS, statColor } from '../data/meta';
 import { useGame } from '../data/store';
+import { PLAN_PAGE } from '../features';
 import { CARE_DAYS, MOODS, MOOD_ORDER, companion, companionLine, moodFor, type CareDay, type Companion, type Mood } from '../game/companion';
 import { weekday } from '../game/dates';
 import { outfitOf, type Outfit } from '../game/wardrobe';
@@ -188,7 +189,8 @@ function CompanionDetails({ c, onClose, onToday }: { c: Shown; onClose(): void; 
       <p className="mt-4 text-xs leading-relaxed text-mute">
         She lives on your habits. Her morale is the share of habits you did over the last {CARE_DAYS} days, the recent
         days counting most: a missed day costs her about one mood, and a good day wins one back. Today only counts in
-        her favour until it is over. Days with nothing to do, and habits you skipped on the Plan page, don’t count.
+        her favour until it is over. Days with nothing to do{PLAN_PAGE ? ', and habits you skipped on the Plan page,' : ''} don’t
+        count.
       </p>
 
       {left > 0 && (

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { DateField } from '../../components/DateField';
 import { Button, Empty, Field, Modal, Panel, Segmented, inputClass } from '../../components/ui';
 import { useGame } from '../../data/store';
+import { PLAN_PAGE } from '../../features';
 import type { Subscription } from '../../data/types';
 import { daysBetween, formatLong, formatShort } from '../../game/dates';
 import { activeCards } from '../../money/cards';
@@ -463,8 +464,8 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
           {floating ? (
             <p className="mt-1.5 flex items-start gap-1.5 text-xs text-mute">
               <CalendarOff size={14} className="mt-px shrink-0" aria-hidden />
-              Counted in your fixed costs every {cycle === 'yearly' ? 'year' : 'month'}, with no due date. It isn’t
-              shown on a day of the Plan page.
+              Counted in your fixed costs every {cycle === 'yearly' ? 'year' : 'month'}, with no due date.
+              {PLAN_PAGE && ' It isn’t shown on a day of the Plan page.'}
             </p>
           ) : (
             <div className="mt-2">

@@ -9,6 +9,7 @@ import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, statColor } from '..
 import { categoryIndex, habitCategory } from '../data/habitCategories';
 import { useGame } from '../data/store';
 import { categoryOf } from '../data/templates';
+import { PLAN_PAGE } from '../features';
 import type { DateStr, Difficulty, Habit, StatKey } from '../data/types';
 import { useCountUp, useDayProgress, useDerived, useToday } from '../hooks';
 import { missedYesterday } from '../game/companion';
@@ -187,7 +188,8 @@ function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolea
   const tomorrow = addDays(date, 1);
   const tomorrowPlanned = isToday && hasPlan(data, tomorrow);
   const planBonus = isToday && !data.claims[`plan|${tomorrow}`];
-  if (!isToday && total === 0 && meals.length === 0 && !day?.note) return null;
+  // Today's card stays when empty only while there is a way to plan from it.
+  if ((!isToday || !PLAN_PAGE) && total === 0 && meals.length === 0 && !day?.note) return null;
 
   return (
     <Panel
@@ -286,7 +288,7 @@ function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolea
         </p>
       )}
 
-      {isToday && (
+      {isToday && PLAN_PAGE && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant={tomorrowPlanned ? 'default' : 'gold'} className="flex-1 whitespace-nowrap" onClick={() => onPlan(1)}>
             <CalendarClock size={16} />
@@ -377,7 +379,7 @@ export function Today({
           {offset === 0 && <BossCard date={date} compact />}
           {offset === 0 && <RoutinesCard date={date} onManage={onManageHabits} />}
           <DayPlanCard date={date} isToday={offset === 0} onPlan={onPlan} />
-          {offset === 0 && <WeekGoalsPanel week={date} onPlanWeek={onPlanWeek} />}
+          {offset === 0 && <WeekGoalsPanel week={date} onPlanWeek={PLAN_PAGE ? onPlanWeek : undefined} />}
           <DailyQuests quests={quests} />
           {offset === 0 && <SleepQuick />}
           <div className="hidden xl:block">
@@ -426,7 +428,7 @@ export function Today({
             {skipped.length > 0 && (
               <p className="mt-4 text-xs text-mute">
                 Skipped for {offset === 0 ? 'today' : 'this day'}, streak kept: {skipped.map((h) => h.name).join(', ')}.
-                {offset === 0 && (
+                {offset === 0 && PLAN_PAGE && (
                   <>
                     {' '}
                     <button type="button" className="text-glow underline-offset-2 hover:underline" onClick={() => onPlan(0)}>

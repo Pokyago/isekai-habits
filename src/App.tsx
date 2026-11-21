@@ -20,6 +20,7 @@ import { LevelUpOverlay, Toasts } from './components/Fx';
 import { useManualDirty } from './components/SyncPanel';
 import { Bar, Button, Ring, Segmented } from './components/ui';
 import { useGame } from './data/store';
+import { PLAN_PAGE } from './features';
 import { nextRankLevel } from './game/levels';
 import { mainId } from './plan/plan';
 import { useChanged, useCountUp, useDayProgress, useDerived, useToday } from './hooks';
@@ -39,12 +40,6 @@ import { hostReady } from './sync/desktop';
 
 type Tab = 'today' | 'plan' | 'habits' | 'health' | 'money' | 'shop' | 'hero' | 'settings';
 
-/**
- * The Plan page's place in the menu. Switched off: the page itself is all still here,
- * and the buttons on Today still open it. Set this to true to put it back in the menu.
- */
-const SHOW_PLAN_IN_MENU = false;
-
 const ALL_TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'today', label: 'Today', icon: Swords },
   { id: 'plan', label: 'Plan', icon: CalendarClock },
@@ -55,8 +50,8 @@ const ALL_TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'hero', label: 'Hero', icon: User },
 ];
 
-/** The sections shown in the menu. */
-const TABS = ALL_TABS.filter((t) => SHOW_PLAN_IN_MENU || t.id !== 'plan');
+/** The sections shown in the menu. The Plan page is left out while it is switched off (see features.ts). */
+const TABS = ALL_TABS.filter((t) => PLAN_PAGE || t.id !== 'plan');
 
 /** How wide each section's content may grow on a large window. */
 const WIDTH: Record<Tab, string> = {
