@@ -10,6 +10,7 @@ import { dueHabits } from '../game/schedule';
 import { averageSleep, formatSleep, sleepLogs } from '../health/health';
 import { useToday } from '../hooks';
 import { formatMoney } from '../money/format';
+import { mealsFor } from '../plan/meals';
 import {
   PLAN_AHEAD_REWARD,
   REWARDED_GOALS,
@@ -24,6 +25,7 @@ import {
   unfinishedBefore,
 } from '../plan/plan';
 import { HabitBoard, IdeaBoard, QuestBoard } from './PlanBoards';
+import { MealBoard } from './PlanMeals';
 
 /** How many days can be planned: today and the six after it. */
 const DAYS = 7;
@@ -37,7 +39,7 @@ function dayName(offset: number, date: DateStr): string {
 /**
  * Plan a day before it starts. On the left, things to choose from by clicking, as
  * on Today: the day's habits, open quests and ready-made goals. On the right, what
- * has been written down: goals and appointments, when to get up, and a note.
+ * has been written down: goals and appointments, meals, when to get up, and a note.
  * It opens on tomorrow; any of the next days can be picked.
  */
 export function Plan({ startOn = 1 }: { startOn?: number }) {
@@ -54,6 +56,7 @@ export function Plan({ startOn = 1 }: { startOn?: number }) {
   const leftoverBefore = offset <= 1 ? date : addDays(today, 1);
   const leftover = useMemo(() => unfinishedBefore(data, leftoverBefore), [data, leftoverBefore]);
   const canTick = offset === 0;
+  const meals = useMemo(() => mealsFor(data, date).length, [data, date]);
 
   return (
     <div className="space-y-4">
@@ -63,6 +66,7 @@ export function Plan({ startOn = 1 }: { startOn?: number }) {
           <p className="text-sm text-mute">
             {formatLong(date)} · {progress.total === 0 ? 'nothing planned yet' : `${progress.total} planned`} · {habits}{' '}
             {habits === 1 ? 'habit' : 'habits'} scheduled
+            {meals > 0 && ` · ${meals} ${meals === 1 ? 'meal' : 'meals'}`}
           </p>
         </div>
 
@@ -107,6 +111,7 @@ export function Plan({ startOn = 1 }: { startOn?: number }) {
         <aside className="space-y-4 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto xl:pr-1">
           <Goals key={`goals|${date}`} date={date} items={plan.items} canTick={canTick} />
           {leftover.length > 0 && <Leftover items={leftover} date={date} name={name} />}
+          <MealBoard key={`meals|${date}`} date={date} canTick={canTick} />
           <DayFrame key={`frame|${date}`} date={date} day={plan.day} />
           <MoneyOnDay date={date} />
           <Note key={`note|${date}`} date={date} note={plan.day?.note ?? ''} />

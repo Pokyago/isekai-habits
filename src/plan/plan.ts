@@ -5,6 +5,7 @@ import { completionId, type DayChoice } from '../game/schedule';
 import { questReward, type RewardAmount } from '../game/xp';
 import { dayInMonth, monthOf } from '../money/format';
 import { activeSubscriptions, nextCharge } from '../money/subscriptions';
+import { mealsFor } from './meals';
 
 /*
  * Planning a day: one main goal, other goals and appointments, a wake-up time and
@@ -119,6 +120,7 @@ export function hasPlan(data: SaveData, date: DateStr): boolean {
     items.length > 0 ||
     quests.length > 0 ||
     habitChoices(data, date).size > 0 ||
+    mealsFor(data, date).length > 0 ||
     (day !== null && (day.wake !== null || day.bed !== null || day.note !== ''))
   );
 }

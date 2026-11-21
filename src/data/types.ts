@@ -139,6 +139,24 @@ export interface DayPlan {
   updatedAt: number;
 }
 
+export type MealSlot = 'breakfast' | 'lunch' | 'snack' | 'dinner';
+
+/**
+ * What is planned to eat at one meal of one day. Its id is `${date}|${slot}`.
+ * Empty text means nothing is planned (a meal that was cleared).
+ */
+export interface Meal {
+  id: string;
+  date: DateStr;
+  slot: MealSlot;
+  text: string;
+  /** Eaten as planned. XP and gold are fixed at that moment. */
+  done: boolean;
+  xp: number;
+  gold: number;
+  updatedAt: number;
+}
+
 // ---------- health ----------
 
 /** One health check-in. There is at most one per day; its id is its date. Anything not measured is null. */
@@ -291,7 +309,7 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 7;
+  version: 8;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
@@ -315,4 +333,6 @@ export interface SaveData {
   days: Record<string, DayPlan>;
   /** Habits picked, skipped or added for particular days. */
   habitDays: Record<string, HabitDay>;
+  /** What is planned to eat, one record for each meal of a day. */
+  meals: Record<string, Meal>;
 }

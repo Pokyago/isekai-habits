@@ -100,6 +100,10 @@ export function Settings() {
             it, and it doesn’t count against a flawless day. A habit added for one day only adds to its streak if you
             do it and costs nothing if you don’t. Picking a habit as a priority only changes where it is listed.
           </li>
+          <li>
+            Meals: each meal you planned and then tick as eaten is worth as much as a Trivial quest, in Vitality XP.
+            A meal that went differently costs nothing.
+          </li>
         </ul>
       </Panel>
 

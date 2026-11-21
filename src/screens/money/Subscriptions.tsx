@@ -26,7 +26,7 @@ export function inDays(days: number): string {
 
 const SOON_DAYS = 7;
 
-/** The words that differ between the two pages. Everything else is shared. */
+/** The words that differ between the two lists. Everything else is shared. */
 const WORDS: Record<
   ChargeType,
   {
@@ -90,19 +90,21 @@ const PAID_WITH: Record<Subscription['paidWith'], string> = {
  * What leaves every month whatever else happens: subscriptions, monthly bills and
  * any other repeating expenses, added together. Shown above both lists and on the overview.
  */
+type CostsView = 'expenses' | 'plans';
+
 export function FixedCosts({
   onOpen,
   className = '',
 }: {
-  /** When given, each line is a button that opens its page. */
-  onOpen?(view: 'subs' | 'bills' | 'plans'): void;
+  /** When given, each line is a button that opens the page it is kept on. */
+  onOpen?(view: CostsView): void;
   className?: string;
 }) {
   const { data, today, fmt } = useMoney();
   const costs = useMemo(() => fixedCosts(data, today), [data, today]);
-  const lines: { view: 'subs' | 'bills' | 'plans'; label: string; count: number; amount: number }[] = [
-    { view: 'subs', label: 'Subscriptions', count: costs.subscriptions.count, amount: costs.subscriptions.perMonth },
-    { view: 'bills', label: 'Monthly bills', count: costs.bills.count, amount: costs.bills.perMonth },
+  const lines: { view: CostsView; label: string; count: number; amount: number }[] = [
+    { view: 'expenses', label: 'Subscriptions', count: costs.subscriptions.count, amount: costs.subscriptions.perMonth },
+    { view: 'expenses', label: 'Monthly bills', count: costs.bills.count, amount: costs.bills.perMonth },
   ];
   // Rent, instalments and the like, set to repeat on the Debts & goals page.
   if (costs.other.count > 0) lines.push({ view: 'plans', label: 'Other monthly expenses', count: costs.other.count, amount: costs.other.perMonth });
@@ -136,7 +138,7 @@ export function FixedCosts({
               </>
             );
             return (
-              <li key={l.view}>
+              <li key={l.label}>
                 {onOpen ? (
                   <button
                     type="button"
@@ -160,12 +162,24 @@ export function FixedCosts({
   );
 }
 
-export function Subscriptions() {
-  return <Charges type="subscription" />;
-}
-
-export function Bills() {
-  return <Charges type="bill" />;
+/**
+ * Everything that is paid month after month, on one page: the total on top, then
+ * subscriptions and monthly bills next to each other (one under the other on a narrow screen).
+ */
+export function MonthlyExpenses() {
+  return (
+    <div className="space-y-4">
+      <FixedCosts />
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Charges type="subscription" />
+        <Charges type="bill" />
+      </div>
+      <p className="max-w-3xl text-xs text-mute">
+        Only the ones set to “Bank: add the entry” put an entry in your account on their day. The others are just
+        listed here, so nothing is counted twice with your card bill or an imported statement.
+      </p>
+    </div>
+  );
 }
 
 function Charges({ type }: { type: ChargeType }) {
@@ -184,9 +198,7 @@ function Charges({ type }: { type: ChargeType }) {
   );
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-2">
-      <FixedCosts className="lg:col-span-2" />
-
+    <div className="min-w-0 space-y-4">
       <Panel
         title={words.title}
         right={
@@ -214,8 +226,8 @@ function Charges({ type }: { type: ChargeType }) {
             <Stats
               items={[
                 ['A year', fmt(totals.perYear)],
-                ['On the card, a month', fmt(totals.onCard)],
-                ['From the bank, a month', fmt(totals.fromBank)],
+                ['Card, a month', fmt(totals.onCard)],
+                ['Bank, a month', fmt(totals.fromBank)],
               ]}
             />
           </>
@@ -261,10 +273,6 @@ function Charges({ type }: { type: ChargeType }) {
               );
             })}
           </ul>
-          <p className="mt-3 text-xs text-mute">
-            Only the ones set to “Bank: add the entry” put an entry in your account on their day. The others are just
-            listed here, so nothing is counted twice with your card bill or an imported statement.
-          </p>
         </Panel>
       )}
 

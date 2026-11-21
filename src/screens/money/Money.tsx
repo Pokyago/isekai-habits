@@ -13,10 +13,10 @@ import { fixedCosts, upcomingCharges } from '../../money/subscriptions';
 import { AmountInput, BalanceForm, BudgetForm, Stats, TransactionForm, useMoney } from './forms';
 import { Charts } from './Charts';
 import { DebtList, GoalList, Plans } from './Plans';
-import { Bills, FixedCosts, Subscriptions, inDays } from './Subscriptions';
+import { FixedCosts, MonthlyExpenses, inDays } from './Subscriptions';
 import { Transactions, TxRow } from './Transactions';
 
-type View = 'overview' | 'entries' | 'charts' | 'plans' | 'subs' | 'bills';
+type View = 'overview' | 'entries' | 'charts' | 'plans' | 'expenses';
 
 export function Money() {
   const hasMoney = useGame((s) => s.data.money !== null);
@@ -47,8 +47,7 @@ export function Money() {
           { value: 'entries', label: 'Entries' },
           { value: 'charts', label: 'Charts' },
           { value: 'plans', label: 'Debts & goals' },
-          { value: 'subs', label: 'Subscriptions' },
-          { value: 'bills', label: 'Monthly bills' },
+          { value: 'expenses', label: 'Monthly expenses' },
         ]}
       />
       </div>
@@ -59,8 +58,7 @@ export function Money() {
       {view === 'entries' && <Transactions onEdit={edit} />}
       {view === 'charts' && <Charts />}
       {view === 'plans' && <Plans onAdd={add} />}
-      {view === 'subs' && <Subscriptions />}
-      {view === 'bills' && <Bills />}
+      {view === 'expenses' && <MonthlyExpenses />}
 
       {form && <TransactionForm tx={form.tx} initial={form.initial} onClose={() => setForm(null)} />}
     </div>

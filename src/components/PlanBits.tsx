@@ -1,7 +1,8 @@
 import { Check, X } from 'lucide-react';
 import { statColor } from '../data/meta';
 import { useGame } from '../data/store';
-import type { PlanItem } from '../data/types';
+import type { Meal, PlanItem } from '../data/types';
+import { MEAL_STAT } from '../plan/meals';
 import { PLAN_STAT } from '../plan/plan';
 import { IconButton, inputBase } from './ui';
 
@@ -27,6 +28,31 @@ export function PlanTick({ item, locked = false, size = 36 }: { item: PlanItem; 
       }}
     >
       {item.done && <Check size={size / 2} strokeWidth={3} className="animate-pop" />}
+    </button>
+  );
+}
+
+/** The box that ticks a meal as eaten as planned. */
+export function MealTick({ meal, label, size = 30 }: { meal: Meal; label: string; size?: number }) {
+  const toggleMeal = useGame((s) => s.toggleMeal);
+  const color = statColor(MEAL_STAT);
+  return (
+    <button
+      type="button"
+      aria-pressed={meal.done}
+      aria-label={`${label}, ${meal.text}: ${meal.done ? 'undo' : 'eaten as planned'}`}
+      title={meal.done ? 'Undo' : 'Eaten as planned'}
+      onClick={() => toggleMeal(meal.id)}
+      className="flex shrink-0 items-center justify-center rounded-lg border-2 transition-transform hover:scale-105"
+      style={{
+        width: size,
+        height: size,
+        borderColor: color,
+        background: meal.done ? color : 'transparent',
+        color: 'var(--color-void)',
+      }}
+    >
+      {meal.done && <Check size={size / 2} strokeWidth={3} className="animate-pop" />}
     </button>
   );
 }

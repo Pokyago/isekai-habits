@@ -10,13 +10,14 @@ import { useFx } from './fx';
 import { emptySave, parseSave, serializeSave } from './merge';
 import * as health from '../health/health';
 import type { CheckInInput } from '../health/health';
+import * as meals from '../plan/meals';
 import * as plan from '../plan/plan';
 import type { PlanInput } from '../plan/plan';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
 import type { ImportRow } from '../money/statement';
 import type { HabitTemplate } from './templates';
-import type { DateStr, Difficulty, HeroClass, SaveData, StatKey } from './types';
+import type { DateStr, Difficulty, HeroClass, MealSlot, SaveData, StatKey } from './types';
 
 const DB_KEY = 'isekai-habits-save';
 
@@ -73,6 +74,10 @@ interface GameState {
   saveDay(date: DateStr, patch: { wake?: string | null; bed?: string | null; note?: string }): void;
   setHabitChoice(habitId: string, date: DateStr, choice: DayChoice | null): void;
   planQuest(questId: string, date: DateStr | null): void;
+  setMeal(date: DateStr, slot: MealSlot, text: string): void;
+  toggleMeal(id: string): void;
+  /** Fills the empty meals of one day with those of another. */
+  copyMeals(from: DateStr, to: DateStr): void;
 
   /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
   tick(): void;
@@ -272,6 +277,15 @@ export const useGame = create<GameState>((set, get) => {
     },
     planQuest(questId, date) {
       apply((d) => plan.planQuest(d, questId, date, Date.now()));
+    },
+    setMeal(date, slot, text) {
+      apply((d) => meals.setMeal(d, date, slot, text, todayStr(), Date.now()));
+    },
+    toggleMeal(id) {
+      apply((d) => meals.toggleMeal(d, id, todayStr(), Date.now()), true);
+    },
+    copyMeals(from, to) {
+      apply((d) => meals.copyMeals(d, from, to, todayStr(), Date.now()));
     },
     tick() {
       applyMoney((d) => d);

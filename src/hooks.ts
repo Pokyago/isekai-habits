@@ -48,6 +48,7 @@ export function useDayProgress(date?: DateStr): DayProgress {
     for (const c of Object.values(data.claims)) if (c.date === day && c.claimed) xp += c.xp;
     for (const q of Object.values(data.quests)) if (q.doneDate === day) xp += q.xp;
     for (const p of Object.values(data.plan)) if (p.date === day && p.done) xp += p.xp;
+    for (const m of Object.values(data.meals)) if (m.date === day && m.done) xp += m.xp;
     return {
       total: scheduled.length,
       done: scheduled.filter((h) => isDone(data, h.id, day)).length,

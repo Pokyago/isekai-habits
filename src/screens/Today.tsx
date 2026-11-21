@@ -1,7 +1,7 @@
 import { CalendarClock, Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { HabitCard } from '../components/HabitCard';
-import { PlanTick } from '../components/PlanBits';
+import { MealTick, PlanTick } from '../components/PlanBits';
 import { SleepQuick } from '../components/SleepQuick';
 import { Bar, Button, Chip, Empty, IconButton, Panel, Ring, StatIcon, inputBase } from '../components/ui';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, statColor } from '../data/meta';
@@ -14,6 +14,7 @@ import { dailyQuests, type DailyQuest } from '../game/dailyQuests';
 import { addDays, daysBetween, formatLong } from '../game/dates';
 import { dueHabits, isDone, isScheduledOn } from '../game/schedule';
 import { BASE_XP } from '../game/xp';
+import { MEAL_SLOTS, mealsFor } from '../plan/meals';
 import { PLAN_AHEAD_REWARD, habitChoices, hasPlan, planFor } from '../plan/plan';
 
 const DAYS_BACK = 7;
@@ -173,13 +174,14 @@ function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolea
   const data = useGame((s) => s.data);
   const toggleQuest = useGame((s) => s.toggleQuest);
   const { main, items, quests, day } = useMemo(() => planFor(data, date), [data, date]);
+  const meals = useMemo(() => mealsFor(data, date), [data, date]);
   const all = main ? [main, ...items] : items;
   const total = all.length + quests.length;
   const doneCount = all.filter((p) => p.done).length + quests.filter((q) => q.doneDate !== null).length;
   const tomorrow = addDays(date, 1);
   const tomorrowPlanned = isToday && hasPlan(data, tomorrow);
   const planBonus = isToday && !data.claims[`plan|${tomorrow}`];
-  if (!isToday && total === 0 && !day?.note) return null;
+  if (!isToday && total === 0 && meals.length === 0 && !day?.note) return null;
 
   return (
     <Panel
@@ -243,7 +245,34 @@ function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolea
           })}
         </ul>
       )}
-      {total === 0 && <p className="text-sm text-mute">Nothing was planned for {isToday ? 'today' : 'this day'}.</p>}
+      {total === 0 && meals.length === 0 && (
+        <p className="text-sm text-mute">Nothing was planned for {isToday ? 'today' : 'this day'}.</p>
+      )}
+      {meals.length > 0 && (
+        <div className={total > 0 ? 'mt-3 border-t border-edge/60 pt-3' : ''}>
+          <p className="mb-1.5 flex items-baseline justify-between text-[10px] font-semibold tracking-wide text-mute uppercase">
+            Meals
+            <span className="tabular-nums">
+              {meals.filter((m) => m.done).length}/{meals.length} eaten
+            </span>
+          </p>
+          <ul className="space-y-1.5">
+            {meals.map((m) => {
+              const label = MEAL_SLOTS.find((s) => s.slot === m.slot)?.label ?? m.slot;
+              return (
+                <li key={m.id} className="flex items-center gap-3 rounded-lg px-1 py-0.5">
+                  <MealTick meal={m} label={label} size={30} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] leading-tight text-mute">{label}</span>
+                    <span className={`block text-sm break-words ${m.done ? 'text-mute line-through' : ''}`}>{m.text}</span>
+                  </span>
+                  {m.done && m.xp > 0 && <span className="shrink-0 text-xs font-semibold text-gold">+{m.xp} XP</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {day?.note && <p className="mt-3 border-l-2 border-edge pl-3 text-sm whitespace-pre-line text-mute">{day.note}</p>}
       {(day?.wake || day?.bed) && (
         <p className="mt-2 text-xs text-mute tabular-nums">

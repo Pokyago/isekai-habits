@@ -2,6 +2,7 @@ import { STAT_ORDER } from '../data/meta';
 import type { DateStr, SaveData, StatKey } from '../data/types';
 import { achievements, type Achievement } from './achievements';
 import { HERO_XP_BASE, STAT_XP_BASE, levelFromXp, rankForLevel, type LevelInfo, type Rank } from './levels';
+import { MEAL_STAT } from '../plan/meals';
 import { PLAN_STAT } from '../plan/plan';
 import { walkStreaks, type HabitStreak } from './streaks';
 
@@ -20,6 +21,8 @@ export interface Derived {
   questsDone: number;
   /** Days whose main goal was achieved. */
   mainGoalsDone: number;
+  /** Meals eaten as they were planned. */
+  mealsKept: number;
   achievements: Achievement[];
 }
 
@@ -53,6 +56,15 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     heroXp += p.xp;
     statXp[PLAN_STAT] += p.xp;
     goldEarned += p.gold;
+  }
+  // Meals eaten as planned train Vitality.
+  let mealsKept = 0;
+  for (const m of Object.values(data.meals)) {
+    if (!m.done) continue;
+    mealsKept++;
+    heroXp += m.xp;
+    statXp[MEAL_STAT] += m.xp;
+    goldEarned += m.gold;
   }
   const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0, health: 0 };
   for (const c of Object.values(data.claims)) {
@@ -98,6 +110,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     completions,
     questsDone,
     mainGoalsDone,
+    mealsKept,
     achievements: achievements({
       completions,
       bestDayStreak,
@@ -113,6 +126,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
       debtsCleared: moneyClaims.debt,
       healthWeeks: moneyClaims.health,
       mainGoalsDone,
+      mealsKept,
     }),
   };
 }
