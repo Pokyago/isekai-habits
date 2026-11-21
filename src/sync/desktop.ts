@@ -41,6 +41,11 @@ host?.addEventListener('message', (event) => {
   else waiting.reject(new Error(reply.error ?? 'The app window could not complete the request.'));
 });
 
+/** Tells the window program that the app itself is on screen, which ends its start-up. */
+export function hostReady(): void {
+  host?.postMessage({ id: 0, cmd: 'ready' });
+}
+
 export function callHost(cmd: HostCommand, text?: string): Promise<HostReply> {
   return new Promise((resolve, reject) => {
     if (!host) return reject(new Error('Not running in the desktop app.'));

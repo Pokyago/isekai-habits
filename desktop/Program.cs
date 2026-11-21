@@ -9,6 +9,7 @@
 // has no server side, so the built files are handed to the web view directly.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -25,19 +26,78 @@ namespace IsekaiHabits;
 
 static class Program
 {
+    // "--profile <folder>" runs a separate copy for testing: its own settings, browser data
+    // and save file, all inside that folder, so the real save is never touched.
+    // "--exit-when-ready" closes the window as soon as the app is up, for timing the start-up.
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        StartupLog.Mark("program started");
+        string profile = null;
+        bool exitWhenReady = false;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--profile" && i + 1 < args.Length) profile = Path.GetFullPath(args[++i]);
+            else if (args[i] == "--exit-when-ready") exitWhenReady = true;
+        }
+        string scope = profile == null ? "" : "." + Hash(profile.ToLowerInvariant());
+
         // Only one window: starting the app again just brings the open one to the front.
-        using var mutex = new Mutex(true, "IsekaiHabits.SingleInstance", out bool first);
-        using var activate = new EventWaitHandle(false, EventResetMode.AutoReset, "IsekaiHabits.Activate");
+        var mutex = new Mutex(true, "IsekaiHabits.SingleInstance" + scope, out bool first);
+        using var activate = new EventWaitHandle(false, EventResetMode.AutoReset, "IsekaiHabits.Activate" + scope);
         if (!first)
         {
             activate.Set();
+            mutex.Dispose();
             return;
         }
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm(activate));
+        var form = new MainForm(activate, profile, exitWhenReady);
+        Application.Run(form);
+        mutex.ReleaseMutex();
+        mutex.Dispose();
+
+        // Started again while it was still closing: open afresh now that the last one is fully gone.
+        if (form.ReopenAfterClose && Environment.ProcessPath != null)
+        {
+            try
+            {
+                var again = new ProcessStartInfo(Environment.ProcessPath) { UseShellExecute = false };
+                foreach (string arg in args) again.ArgumentList.Add(arg);
+                Process.Start(again)?.Dispose();
+            }
+            catch { /* the user can start it again by hand */ }
+        }
+    }
+
+    static string Hash(string text)
+    {
+        uint h = 2166136261;
+        foreach (char c in text) h = (h ^ c) * 16777619;
+        return h.ToString("x8");
+    }
+}
+
+/// <summary>How long each step of starting up took, kept as startup.txt beside the window settings.</summary>
+static class StartupLog
+{
+    static readonly Stopwatch clock = Stopwatch.StartNew();
+    // The time Windows and .NET needed before the first line of this program ran.
+    static readonly double before = Math.Max(0, (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds);
+    static readonly List<string> lines = new();
+
+    public static void Mark(string step)
+    {
+        lock (lines) lines.Add($"{before + clock.Elapsed.TotalMilliseconds,6:0} ms  {step}");
+    }
+
+    public static void Save(string folder)
+    {
+        try
+        {
+            lock (lines) File.WriteAllLines(Path.Combine(folder, "startup.txt"), lines);
+        }
+        catch { /* not important */ }
     }
 }
 
@@ -53,11 +113,22 @@ sealed class MainForm : Form
     readonly WebView2 web = new() { Dock = DockStyle.Fill, Visible = false };
     readonly Label status = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Text = "Starting Isekai Habits…", Font = new Font("Segoe UI", 11f) };
     static readonly string root = FindRoot();
-    readonly string stateDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IsekaiHabits");
+    readonly string stateDir;
+    readonly bool testProfile;
+    readonly bool exitWhenReady;
     bool closing;
+    bool leaving;
+    bool wantedAgain;
+    bool ready;
 
-    public MainForm(EventWaitHandle activate)
+    /// <summary>The app was started again while this window was closing.</summary>
+    public bool ReopenAfterClose { get; private set; }
+
+    public MainForm(EventWaitHandle activate, string profile, bool exitWhenReady)
     {
+        stateDir = profile ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IsekaiHabits");
+        testProfile = profile != null;
+        this.exitWhenReady = exitWhenReady;
         Text = "Isekai Habits";
         MinimumSize = new Size(420, 560);
         using (var icon = typeof(MainForm).Assembly.GetManifestResourceStream("icon.ico"))
@@ -74,12 +145,17 @@ sealed class MainForm : Form
             while (true)
             {
                 activate.WaitOne();
-                try { BeginInvoke(BringToFront_); } catch { /* window is closing */ }
+                try { BeginInvoke(Activated_); } catch { /* window is closing */ }
             }
         }) { IsBackground = true };
         listener.Start();
 
-        Shown += async (_, _) => await StartAsync();
+        Shown += async (_, _) =>
+        {
+            StartupLog.Mark("window shown");
+            await StartAsync();
+        };
+        StartupLog.Mark("window created");
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -106,8 +182,13 @@ sealed class MainForm : Form
                 throw new FileNotFoundException("Could not find the built app (dist\\index.html). Keep \"Isekai Habits.exe\" inside the Isekai Habits folder, and run \"npm run build\" there once.");
 
             Directory.CreateDirectory(stateDir);
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(stateDir, "WebView2"));
+            // The app's address is made up, and the browser engine would still spend two seconds
+            // asking the network where it is before using the files on disk. This answers at once.
+            var options = new CoreWebView2EnvironmentOptions("--host-resolver-rules=\"MAP " + Host + " 127.0.0.1\"");
+            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(stateDir, "WebView2"), options);
+            StartupLog.Mark("browser engine started");
             await web.EnsureCoreWebView2Async(env);
+            StartupLog.Mark("web view ready");
             var core = web.CoreWebView2;
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
@@ -130,7 +211,12 @@ sealed class MainForm : Form
                 e.Cancel = true;
                 OpenExternally(e.Uri);
             };
-            core.NavigationCompleted += (_, _) => { web.Visible = true; status.Visible = false; };
+            core.NavigationCompleted += (_, _) =>
+            {
+                StartupLog.Mark("page loaded");
+                web.Visible = true;
+                status.Visible = false;
+            };
             core.Navigate(Origin + "/index.html");
         }
         catch (Exception ex)
@@ -171,6 +257,7 @@ sealed class MainForm : Form
             if (chosen.Length > 0) return chosen;
         }
         catch { /* nothing chosen yet */ }
+        if (testProfile) return Path.Combine(stateDir, SaveFileName);
 
         string icloud = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "iCloudDrive");
         if (Directory.Exists(icloud))
@@ -192,6 +279,16 @@ sealed class MainForm : Form
             id = message.GetProperty("id").GetInt32();
             string cmd = message.GetProperty("cmd").GetString();
             string text = message.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+            if (cmd == "ready")
+            {
+                // The page has drawn the app itself: start-up is over.
+                if (ready) return;
+                ready = true;
+                StartupLog.Mark("app ready");
+                StartupLog.Save(stateDir);
+                if (exitWhenReady) BeginInvoke(Close);
+                return;
+            }
             string path = SavePath();
 
             switch (cmd)
@@ -274,6 +371,7 @@ sealed class MainForm : Form
         if (closing || e.Cancel || web.CoreWebView2 == null) { SaveBounds(); return; }
         e.Cancel = true;
         closing = true;
+        StartupLog.Mark("closing");
         SaveBounds();
         Hide();
         try
@@ -282,6 +380,29 @@ sealed class MainForm : Form
             await Task.Delay(600);
         }
         catch { /* page not loaded */ }
+        if (wantedAgain)
+        {
+            // Started again while the last save was being written: simply stay open.
+            wantedAgain = false;
+            closing = false;
+            StartupLog.Mark("started again while closing: staying open");
+            Show();
+            Activated_();
+            return;
+        }
+        leaving = true;
+        try
+        {
+            // Wait for the browser engine to be gone before this program ends. Left to wind down
+            // on its own it lingers, and starting the app again meanwhile takes five seconds.
+            var gone = new TaskCompletionSource<bool>();
+            web.CoreWebView2.Environment.BrowserProcessExited += (_, _) => gone.TrySetResult(true);
+            web.Dispose();
+            await Task.WhenAny(gone.Task, Task.Delay(2500));
+            StartupLog.Mark(gone.Task.IsCompleted ? "browser engine gone" : "browser engine still there after 2.5 s");
+        }
+        catch { /* already gone */ }
+        StartupLog.Save(stateDir);
         Close();
     }
 
@@ -323,8 +444,16 @@ sealed class MainForm : Form
         catch { /* not important */ }
     }
 
-    void BringToFront_()
+    /// <summary>The app was started a second time: show this window, or open again if it is on its way out.</summary>
+    void Activated_()
     {
+        if (closing)
+        {
+            // Too late to stay open once the page is gone: then it opens afresh after this one has ended.
+            if (leaving) ReopenAfterClose = true;
+            else wantedAgain = true;
+            return;
+        }
         ShowWindow(Handle, 9 /* SW_RESTORE */);
         SetForegroundWindow(Handle);
     }

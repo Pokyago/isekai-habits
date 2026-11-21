@@ -15,12 +15,12 @@ const swap = (svg, from, to) => {
 
 // Windows and the browser tab show the icon as it is, so there it gets rounded corners.
 // Phones and the installed app cut their own shape, and need the square to be full.
-const rounded = swap(full, 'rx="0"', 'rx="112"');
+const rounded = swap(full, /rx="0"/g, 'rx="112"');
 
-// At taskbar sizes the circle and stars turn to noise: leave them out and let the sword fill the square.
+// At taskbar sizes the circle and stars turn to noise: leave them out and let her face fill the square.
 let small = swap(rounded, /<g id="detail">[\s\S]*?<\/g>/, '');
 small = swap(small, /<g id="spark"[\s\S]*?<\/g>/, '');
-small = swap(small, '<g id="sword">', '<g id="sword" transform="translate(256 256) scale(1.22) translate(-256 -262)">');
+small = swap(small, /<g id="heroine" transform="[^"]*">/, '<g id="heroine" transform="translate(256 268) scale(6.6) translate(-60 -60)">');
 
 const render = (svg, size) => sharp(Buffer.from(svg), { density: 300 }).resize(size, size).png();
 

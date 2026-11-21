@@ -34,6 +34,7 @@ import { Settings } from './screens/Settings';
 import { Shop } from './screens/Shop';
 import { Today } from './screens/Today';
 import { initSync, reconnectSaveFile, syncMode, useSync } from './sync';
+import { hostReady } from './sync/desktop';
 
 type Tab = 'today' | 'plan' | 'habits' | 'health' | 'money' | 'shop' | 'hero' | 'settings';
 
@@ -80,6 +81,17 @@ export default function App() {
       .load()
       .then(() => initSync());
   }, []);
+
+  // Once the app itself has been drawn, the desktop window can take its start-up screen away.
+  useEffect(() => {
+    if (!loaded) return;
+    const frame = requestAnimationFrame(() => hostReady());
+    const fallback = setTimeout(hostReady, 300);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(fallback);
+    };
+  }, [loaded]);
 
   // When a new day starts with the app open, add the monthly money items that came due.
   const today = useToday();
