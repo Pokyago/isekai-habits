@@ -20,7 +20,7 @@ const MOOD_COLOR: Record<Mood, string> = {
 interface Shown extends Companion {
   line: string;
   color: string;
-  /** The colour of her cape: the hero's class. */
+  /** The colour of the gem on her bow: the hero's class. */
   accent: string;
   /** True for a moment after XP was earned: she jumps for joy. */
   cheering: boolean;

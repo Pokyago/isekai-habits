@@ -1,13 +1,22 @@
 import { useId } from 'react';
 import type { Mood } from '../game/companion';
 
-const HAIR = '#e6e0ff';
-const HAIR_SHADE = '#beb2f2';
-const HAIR_DARK = '#8f83d8';
+const HAIR = '#eceef6';
+const HAIR_SHADE = '#c3c8da';
+const HAIR_DARK = '#8f96ae';
 const SKIN = '#ffe6d6';
-const INK = '#2a2a5c';
-const DRESS = '#f4f5ff';
-const DRESS_SHADE = '#cdd3f3';
+const SKIN_SHADE = '#f1c2ab';
+const INK = '#33213a';
+const IRIS = '#e23f55';
+const WHITE = '#f7f8fc';
+const WHITE_SHADE = '#dde1ee';
+const VEST = '#383b4a';
+const RED = '#c9303f';
+const RED_SHADE = '#9c2232';
+const BLUE = '#2a428f';
+const GREEN = '#2e8b78';
+const GREEN_SHADE = '#216b5c';
+const LEATHER = '#5e4336';
 const LIP = '#b23a5c';
 const GOLD = '#f3c452';
 
@@ -33,7 +42,7 @@ export function Heroine({
 }: {
   mood: Mood;
   cheering?: boolean;
-  /** The colour of her cape and trim: the hero's class. */
+  /** The colour of the gem on her bow: the hero's class. */
   accent: string;
   /** The colour of the light around her: her mood. */
   tone: string;
@@ -44,7 +53,6 @@ export function Heroine({
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const look: Mood = cheering ? 'radiant' : mood;
   const pose = cheering ? 'cheer' : mood;
-  const cape = `color-mix(in srgb, ${accent} 55%, #0b0e22)`;
 
   return (
     <svg
@@ -75,58 +83,93 @@ export function Heroine({
       )}
 
       <g className="hv-body">
-        {/* Cape, then the long hair falling over it. The hair turns with her head. */}
-        <path d="M46 92 C36 104 30 120 28 135 Q60 143 92 135 C90 120 84 104 74 92 Z" style={{ fill: cape }} />
+        {/* Her long hair, which turns with her head. */}
         <g className="hv-head" style={{ transformOrigin: '60px 86px' }}>
           <path
-            d="M27 56 C22 14 98 14 93 56 C97 76 99 96 95 114 C90 108 86 104 82 102 C80 106 78 108 75 110 L45 110 C42 108 40 106 38 102 C34 104 30 108 25 114 C21 96 23 76 27 56 Z"
+            d="M27 56 C22 14 98 14 93 56 C98 80 101 108 98 132 C94 125 91 121 88 119 C87 123 85 126 82 128 L38 128 C35 126 33 123 32 119 C29 121 26 125 22 132 C19 108 22 80 27 56 Z"
             fill={HAIR_SHADE}
           />
         </g>
 
-        {/* Legs and boots. */}
-        <rect x="51" y="122" width="6.5" height="20" rx="3" fill="#39407a" />
-        <rect x="62.5" y="122" width="6.5" height="20" rx="3" fill="#39407a" />
-        <rect x="49" y="138" width="10" height="9.5" rx="3.5" fill="#8a6248" />
-        <rect x="61" y="138" width="10" height="9.5" rx="3.5" fill="#8a6248" />
-        <path d="M49.5 140.5 H58.5 M61.5 140.5 H70.5" stroke={GOLD} strokeWidth="1.4" strokeLinecap="round" />
+        {/* The cape hangs from one shoulder: red, lined in blue, edged in gold, and cut to two points. */}
+        <path d="M70 97 C77 108 80 122 81 135 L87 141 C86 124 81 108 72 96 Z" fill={BLUE} />
+        <path
+          d="M66 90 L80 91 C91 104 98 120 101 137 L92 131 L87 141 C86 124 81 108 72 96 Z"
+          fill={RED}
+          stroke={GOLD}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path d="M80 93 C88 106 93 119 95.5 131" fill="none" stroke={RED_SHADE} strokeWidth="1.2" strokeLinecap="round" />
 
-        {/* Dress, with a hem in the class colour and a gold belt. */}
-        <path d="M49 91 C46 100 42 114 39 125 Q60 133 81 125 C78 114 74 100 71 91 Z" fill={DRESS} />
-        <path d="M60 100 C59 110 58 120 57.5 129" fill="none" stroke={DRESS_SHADE} strokeWidth="1.2" strokeLinecap="round" />
-        <path d="M39.8 122.4 Q60 130.4 80.2 122.4" fill="none" style={{ stroke: accent }} strokeWidth="3" />
-        <path d="M45.4 106 Q60 110.5 74.6 106" fill="none" stroke={GOLD} strokeWidth="2.6" />
+        {/* White stockings and tall boots with gold cuffs. */}
+        <rect x="51" y="122" width="6.5" height="20" rx="3" fill={WHITE} />
+        <rect x="62.5" y="122" width="6.5" height="20" rx="3" fill={WHITE} />
+        <rect x="49.2" y="134" width="10" height="13.5" rx="3.5" fill={LEATHER} />
+        <rect x="60.8" y="134" width="10" height="13.5" rx="3.5" fill={LEATHER} />
+        <path d="M49.6 136.4 H58.8 M61.2 136.4 H70.4" stroke={GOLD} strokeWidth="1.6" strokeLinecap="round" />
 
-        {/* Arms turn at the shoulder. */}
+        {/* Neck, blouse and the dark vest with its gold buttons. */}
+        <rect x="56.5" y="80" width="7" height="13" fill={SKIN_SHADE} />
+        <path d="M49.5 91 C48 97 47 103 46.5 109 L73.5 109 C73 103 72 97 70.5 91 Z" fill={WHITE} />
+        <path d="M48.7 95.5 L55 95.5 L60 102.5 L65 95.5 L71.3 95.5 L73.5 109 L46.5 109 Z" fill={VEST} />
+        <path d="M55 95.5 L60 102.5 L65 95.5" fill="none" stroke={GOLD} strokeWidth="0.9" strokeLinejoin="round" />
+        <g fill={GOLD}>
+          <circle cx="54.6" cy="101" r="0.9" />
+          <circle cx="65.4" cy="101" r="0.9" />
+          <circle cx="55.6" cy="104.6" r="0.9" />
+          <circle cx="64.4" cy="104.6" r="0.9" />
+        </g>
+
+        {/* Pleated green skirt with a gold hem, under a leather belt. */}
+        <path d="M46 109 L74 109 C77 115 80 121 82 126 Q60 133.5 38 126 C40 121 43 115 46 109 Z" fill={GREEN} />
+        <path d="M52.5 111 L48.5 129 M60 111 V131 M67.5 111 L71.5 129" stroke={GREEN_SHADE} strokeWidth="1.1" strokeLinecap="round" />
+        <path d="M39 123.6 Q60 130.8 81 123.6" fill="none" stroke={GOLD} strokeWidth="1.6" />
+        <path d="M46.3 107 H73.7 L74.2 110.8 H45.8 Z" fill="#7a5236" />
+        <rect x="57.6" y="106.6" width="4.8" height="4.6" rx="0.8" fill="none" stroke={GOLD} strokeWidth="1.2" />
+
+        {/* Arms turn at the shoulder: puffed white sleeves with gold cuffs. */}
         <g className="hv-arm hv-arm-l" style={{ transformOrigin: '48px 96px' }}>
-          <path d="M48 96 L39.5 116" stroke={SKIN} strokeWidth="6" strokeLinecap="round" />
-          <circle cx="48.4" cy="96.4" r="5.4" fill={DRESS_SHADE} />
+          <path d="M48 96 L40.6 113.4" stroke={WHITE} strokeWidth="7" strokeLinecap="round" />
+          <path d="M41.3 111.8 L40.5 113.7" stroke={GOLD} strokeWidth="7.4" />
+          <circle cx="39.5" cy="116.3" r="3.3" fill={SKIN} />
+          <circle cx="48.4" cy="96.4" r="5.4" fill={WHITE_SHADE} />
         </g>
         <g className="hv-arm hv-arm-r" style={{ transformOrigin: '72px 96px' }}>
-          <path d="M72 96 L80.5 116" stroke={SKIN} strokeWidth="6" strokeLinecap="round" />
-          <circle cx="71.6" cy="96.4" r="5.4" fill={DRESS_SHADE} />
+          <path d="M72 96 L79.4 113.4" stroke={WHITE} strokeWidth="7" strokeLinecap="round" />
+          <path d="M78.7 111.8 L79.5 113.7" stroke={GOLD} strokeWidth="7.4" />
+          <circle cx="80.5" cy="116.3" r="3.3" fill={SKIN} />
+          <circle cx="71.6" cy="96.4" r="5.4" fill={WHITE_SHADE} />
         </g>
 
-        {/* Collar and brooch. */}
-        <path d="M47 92 Q60 102 73 92 Q60 86.5 47 92 Z" style={{ fill: accent }} />
-        <circle cx="60" cy="96.2" r="2.6" fill={GOLD} />
+        {/* The gold epaulette that holds the cape. */}
+        <path d="M70.5 95.6 v3.2 M73 96.4 v3.2 M75.5 96.7 v3.2 M78 96.4 v3.2 M80.5 95.6 v3.2" stroke={GOLD} strokeWidth="1.3" strokeLinecap="round" />
+        <ellipse cx="75.5" cy="93" rx="7.2" ry="3.5" fill={GOLD} />
+        <ellipse cx="75.5" cy="92.4" rx="5" ry="1.8" fill="#ffe08a" />
+
+        {/* Collar, and a red bow with a gem in the class colour. */}
+        <path d="M53 89.5 L60 95 L67 89.5 L65 87.2 L60 91 L55 87.2 Z" fill="#fff" />
+        <path d="M60 94.5 L52.8 91 L53.6 98 Z M60 94.5 L67.2 91 L66.4 98 Z" fill={RED} />
+        <circle cx="60" cy="94.5" r="2" style={{ fill: accent }} stroke={GOLD} strokeWidth="0.7" />
 
         <g className="hv-head" style={{ transformOrigin: '60px 86px' }}>
           <ellipse cx="60" cy="59" rx="26.5" ry="24.5" fill={SKIN} />
           <Face look={look} uid={uid} />
 
-          {/* Fringe, the locks beside her face, and the one strand that never lies flat. */}
+          {/* Fringe with a strand between the eyes, long locks beside her face, and the one strand that never lies flat. */}
           <path
-            d="M32.5 60 C29 18 91 18 87.5 60 C86.5 56 84 53 81 51 C79 54 74 57 68 58 C68 52 65 47 60 44 C57 50 51 56 44 58 C44 55 42 52 39.5 51 C36.5 53 34 56 32.5 60 Z"
+            d="M32.5 60 C29 18 91 18 87.5 60 C86.5 56 84 53 81 51 C79 55 75 57.5 70 58 C70 53 68 49 65 46 C64 52 62 58 60 62 C58 56 55 50 51 46 C50 51 47 56 43 58 C43.5 55 42 52 39.5 51 C36.5 53 34 56 32.5 60 Z"
             fill={HAIR}
           />
-          <path d="M32.5 54 C30 68 31 82 36 92 C39 82 39.5 68 38.5 54 Z" fill={HAIR} />
-          <path d="M87.5 54 C90 68 89 82 84 92 C81 82 80.5 68 81.5 54 Z" fill={HAIR} />
-          <path d="M42 37.5 Q52 29.5 66 29.5" fill="none" stroke="#fff" strokeOpacity="0.6" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M32.5 54 C29.5 70 30 90 34.5 104 C38 90 39.5 70 38.5 54 Z" fill={HAIR} />
+          <path d="M87.5 54 C90.5 70 90 90 85.5 104 C82 90 80.5 70 81.5 54 Z" fill={HAIR} />
+          <path d="M42 37.5 Q52 29.5 66 29.5" fill="none" stroke="#fff" strokeOpacity="0.75" strokeWidth="2.4" strokeLinecap="round" />
           <path className="hv-ahoge" d="M58 28 C54 16 64 10 70 16 C65 16 62 20 63 28 Z" fill={HAIR} style={{ transformOrigin: '60.5px 28px' }} />
-          <g transform="translate(80 42)">
-            <path d={SPARKLE} fill={GOLD} transform="scale(0.95)" />
-          </g>
+
+          {/* A gold leaf clip tied with a dark ribbon. */}
+          <path d="M84.5 45 L90 42.5 L89 49 Z M84.5 45 L86.5 52.5 L81.5 50.5 Z" fill="#2d2f3a" />
+          <path d="M76 45.5 Q78 36.5 86 36.5 Q84.5 45 76 45.5 Z" fill={GOLD} />
+          <path d="M77.5 44.5 L84.5 38" fill="none" stroke="#c9972e" strokeWidth="0.8" strokeLinecap="round" />
 
           {/* Worried brows show through the fringe. */}
           {(look === 'tired' || look === 'exhausted') && (
@@ -163,7 +206,7 @@ function Face({ look, uid }: { look: Mood; uid: string }) {
             <g key={cx}>
               <g clipPath={look === 'tired' ? `url(#${uid}-lid-${cx})` : undefined}>
                 <ellipse cx={cx} cy={EYE_Y} rx="4.7" ry="6.1" fill={INK} />
-                <ellipse cx={cx} cy={EYE_Y + 2} rx="3.2" ry="3.4" fill="#6fd6ff" opacity="0.9" />
+                <ellipse cx={cx} cy={EYE_Y + 2} rx="3.2" ry="3.4" fill={IRIS} />
                 <circle cx={cx - 1.6} cy={EYE_Y - 2.6} r={look === 'cheerful' ? 1.9 : 1.6} fill="#fff" />
                 <circle cx={cx + 1.9} cy={EYE_Y + 2.6} r="0.85" fill="#fff" opacity="0.85" />
               </g>
