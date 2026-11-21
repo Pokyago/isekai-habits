@@ -1,3 +1,4 @@
+import { settleBoss } from '../game/boss';
 import { claimId, dailyQuests } from '../game/dailyQuests';
 import { completionId } from '../game/schedule';
 import { bonusStreak, walkStreaks } from '../game/streaks';
@@ -39,6 +40,8 @@ export interface HabitInput {
   difficulty: Difficulty;
   schedule: Schedule;
   target: number;
+  /** Why you want the habit. Empty or left out for none. */
+  why?: string;
 }
 
 export function createHero(
@@ -101,7 +104,13 @@ function normalise(input: HabitInput): HabitInput {
     input.schedule.kind === 'perWeek'
       ? { kind: 'perWeek', times: Math.min(7, Math.max(1, Math.round(input.schedule.times))) }
       : { kind: 'weekdays', days: [...new Set(input.schedule.days)].sort() };
-  return { ...input, name: input.name.trim(), schedule, target: Math.min(99, Math.max(1, Math.round(input.target))) };
+  return {
+    ...input,
+    name: input.name.trim(),
+    schedule,
+    target: Math.min(99, Math.max(1, Math.round(input.target))),
+    why: input.why?.trim() || undefined,
+  };
 }
 
 export function saveHabit(
@@ -195,7 +204,8 @@ export function setHabitCount(data: SaveData, habitId: string, date: DateStr, co
     next = { ...next, completions: { ...next.completions, [id]: completion } };
   }
 
-  return syncClaims(next, date, now);
+  // Ticking a habit may finish off the week's boss, or bring it back when unticked.
+  return settleBoss(syncClaims(next, date, now), date, now);
 }
 
 export function addQuest(data: SaveData, title: string, stat: StatKey, difficulty: Difficulty, now: number): SaveData {

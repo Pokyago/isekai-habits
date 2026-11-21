@@ -1,5 +1,6 @@
 import { BookOpen, Coins, Heart, Sparkles, Sword, Target, X, type LucideIcon } from 'lucide-react';
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { statColor } from '../data/meta';
 import type { StatKey } from '../data/types';
 
@@ -76,7 +77,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose(): 
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  // Drawn at the top of the page: a panel's blurred background would otherwise trap a dialog opened from inside it.
+  return createPortal(
     <div
       className="animate-fade fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -95,7 +97,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose(): 
         </header>
         <div className="p-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

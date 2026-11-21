@@ -1,6 +1,8 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { create } from 'zustand';
-import { todayStr } from '../game/dates';
+import { addDays, todayStr } from '../game/dates';
+import * as routines from '../game/routines';
+import type { RoutineInput } from '../game/routines';
 import * as wardrobe from '../game/wardrobe';
 import { derive } from '../game/derive';
 import type { DayChoice } from '../game/schedule';
@@ -14,6 +16,7 @@ import type { CheckInInput } from '../health/health';
 import * as meals from '../plan/meals';
 import * as plan from '../plan/plan';
 import type { PlanInput } from '../plan/plan';
+import * as week from '../plan/week';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
 import * as cards from '../money/cardActions';
@@ -93,6 +96,14 @@ interface GameState {
   toggleMeal(id: string): void;
   /** Fills the empty meals of one day with those of another. */
   copyMeals(from: DateStr, to: DateStr): void;
+  // The week
+  addWeekGoal(anyDay: DateStr, title: string): void;
+  renameWeekGoal(id: string, title: string): void;
+  toggleWeekGoal(id: string): void;
+  deleteWeekGoal(id: string): void;
+  // Routines
+  saveRoutine(input: RoutineInput, id?: string): void;
+  deleteRoutine(id: string): void;
 
   /** Adds monthly items that have come due and settles rewards. Called on start and when the day changes. */
   tick(): void;
@@ -129,6 +140,12 @@ export const useGame = create<GameState>((set, get) => {
     if (after === before) return;
     set({ data: after });
     if (feedback) withFeedback(before, after);
+  };
+  /** After a change to the plans: this week and the next may have just become planned. */
+  const planned = (d: SaveData): SaveData => {
+    const today = todayStr();
+    const now = Date.now();
+    return week.settleWeekPlan(week.settleWeekPlan(d, today, today, now), addDays(today, 7), today, now);
   };
   /** A money change, followed by anything it makes due (monthly items, rewards). */
   const applyMoney = (fn: (data: SaveData) => SaveData) =>
@@ -293,7 +310,7 @@ export const useGame = create<GameState>((set, get) => {
       apply((d) => health.deleteSleep(d, date, Date.now()));
     },
     setMainGoal(date, title) {
-      apply((d) => plan.setMainGoal(d, date, title, todayStr(), Date.now()), true);
+      apply((d) => planned(plan.setMainGoal(d, date, title, todayStr(), Date.now())), true);
     },
     addPlanItem(date, input) {
       apply((d) => plan.addPlanItem(d, date, input, Date.now()));
@@ -308,7 +325,7 @@ export const useGame = create<GameState>((set, get) => {
       apply((d) => plan.deletePlanItem(d, id, Date.now()));
     },
     movePlanItem(id, toDate) {
-      apply((d) => plan.movePlanItem(d, id, toDate, Date.now()));
+      apply((d) => planned(plan.movePlanItem(d, id, toDate, Date.now())), true);
     },
     saveDay(date, patch) {
       apply((d) => plan.saveDay(d, date, patch, Date.now()));
@@ -327,6 +344,24 @@ export const useGame = create<GameState>((set, get) => {
     },
     copyMeals(from, to) {
       apply((d) => meals.copyMeals(d, from, to, todayStr(), Date.now()));
+    },
+    addWeekGoal(anyDay, title) {
+      apply((d) => planned(week.addWeekGoal(d, anyDay, title, todayStr(), Date.now())), true);
+    },
+    renameWeekGoal(id, title) {
+      apply((d) => week.renameWeekGoal(d, id, title, Date.now()));
+    },
+    toggleWeekGoal(id) {
+      apply((d) => week.toggleWeekGoal(d, id, todayStr(), Date.now()), true);
+    },
+    deleteWeekGoal(id) {
+      apply((d) => week.deleteWeekGoal(d, id, Date.now()));
+    },
+    saveRoutine(input, id) {
+      apply((d) => routines.saveRoutine(d, input, id, Date.now()));
+    },
+    deleteRoutine(id) {
+      apply((d) => routines.deleteRoutine(d, id, Date.now()));
     },
     tick() {
       applyMoney((d) => d);

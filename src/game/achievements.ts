@@ -25,6 +25,8 @@ export interface AchievementInput {
   mainGoalsDone: number;
   /** Meals eaten as they were planned. */
   mealsKept: number;
+  /** Weekly bosses beaten. */
+  bossesDefeated: number;
 }
 
 export function achievements(a: AchievementInput): Achievement[] {
@@ -58,6 +60,9 @@ export function achievements(a: AchievementInput): Achievement[] {
     ['plan-30', 'Grand Strategist', 'Achieve your main goal on 30 days', a.mainGoalsDone >= 30],
     ['meal-10', 'Camp Cook', 'Eat 10 meals as you planned them', a.mealsKept >= 10],
     ['meal-100', 'Master of the Hearth', 'Eat 100 meals as you planned them', a.mealsKept >= 100],
+    ['boss-1', 'Monster Hunter', 'Defeat a weekly boss', a.bossesDefeated >= 1],
+    ['boss-5', 'Slayer', 'Defeat 5 weekly bosses', a.bossesDefeated >= 5],
+    ['boss-20', 'Bane of Idleness', 'Defeat 20 weekly bosses', a.bossesDefeated >= 20],
   ];
   return list.map(([id, title, description, earned]) => ({ id, title, description, earned }));
 }

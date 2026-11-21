@@ -23,6 +23,8 @@ export interface Derived {
   mainGoalsDone: number;
   /** Meals eaten as they were planned. */
   mealsKept: number;
+  /** Weekly bosses beaten. */
+  bossesDefeated: number;
   achievements: Achievement[];
 }
 
@@ -66,7 +68,14 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     statXp[MEAL_STAT] += m.xp;
     goldEarned += m.gold;
   }
-  const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0, health: 0 };
+  // Goals for the week train Focus, like the day's goals.
+  for (const g of Object.values(data.weekGoals)) {
+    if (!g.done) continue;
+    heroXp += g.xp;
+    statXp[PLAN_STAT] += g.xp;
+    goldEarned += g.gold;
+  }
+  const moneyClaims = { ledger: 0, budget: 0, goal: 0, debt: 0, health: 0, boss: 0 };
   for (const c of Object.values(data.claims)) {
     if (!c.claimed) continue;
     heroXp += c.xp;
@@ -111,6 +120,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
     questsDone,
     mainGoalsDone,
     mealsKept,
+    bossesDefeated: moneyClaims.boss,
     achievements: achievements({
       completions,
       bestDayStreak,
@@ -127,6 +137,7 @@ export function derive(data: SaveData, asOf: DateStr): Derived {
       healthWeeks: moneyClaims.health,
       mainGoalsDone,
       mealsKept,
+      bossesDefeated: moneyClaims.boss,
     }),
   };
 }

@@ -13,7 +13,7 @@ const ids = (d: SaveData) => Object.fromEntries(SLOTS.map(({ slot }) => [slot, o
 
 describe('the wardrobe', () => {
   it('has one free piece for every part of her outfit, and unique ids', () => {
-    for (const { slot } of SLOTS) expect(itemsFor(slot).filter((i) => i.cost === 0)).toHaveLength(1);
+    for (const { slot } of SLOTS) expect(itemsFor(slot).filter((i) => i.cost === 0 && i.bosses === undefined)).toHaveLength(1);
     expect(new Set(ITEMS.map((i) => i.id)).size).toBe(ITEMS.length);
   });
 
@@ -69,7 +69,7 @@ describe('the wardrobe', () => {
     delete old.wardrobe;
     old.version = 8;
     const opened = parseSave(JSON.stringify(old));
-    expect(opened.version).toBe(10);
+    expect(opened.version).toBe(11);
     expect(opened.wardrobe).toBeNull();
     expect(outfitOf(opened)).toEqual(STARTER_OUTFIT);
   });

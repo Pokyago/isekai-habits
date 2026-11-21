@@ -613,3 +613,22 @@ body::after {
     display: none;
   }
 }
+
+/* ---------- the weekly boss ---------- */
+@keyframes boss-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3%);
+  }
+}
+.boss-idle {
+  animation: boss-bob 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boss-idle {
+    animation: none;
+  }
+}

@@ -14,6 +14,7 @@ export function xpBetween(data: SaveData, from: DateStr, to: DateStr): number {
   for (const q of Object.values(data.quests)) if (within(q.doneDate)) xp += q.xp;
   for (const p of Object.values(data.plan)) if (p.done && within(p.date)) xp += p.xp;
   for (const m of Object.values(data.meals)) if (m.done && within(m.date)) xp += m.xp;
+  for (const g of Object.values(data.weekGoals)) if (g.done && within(g.doneDate)) xp += g.xp;
   return xp;
 }
 

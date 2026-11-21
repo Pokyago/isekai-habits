@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { HabitCard } from '../components/HabitCard';
 import { MealTick, PlanTick } from '../components/PlanBits';
 import { SleepQuick } from '../components/SleepQuick';
+import { BossCard, RoutinesCard, WeekGoalsPanel } from '../components/WeekBits';
 import { Bar, Button, Chip, Empty, IconButton, Panel, Ring, StatIcon, inputBase } from '../components/ui';
 import { DIFFICULTIES, DIFFICULTY_ORDER, STATS, STAT_ORDER, statColor } from '../data/meta';
 import { categoryIndex, habitCategory } from '../data/habitCategories';
@@ -10,6 +11,7 @@ import { useGame } from '../data/store';
 import { categoryOf } from '../data/templates';
 import type { DateStr, Difficulty, Habit, StatKey } from '../data/types';
 import { useCountUp, useDayProgress, useDerived, useToday } from '../hooks';
+import { missedYesterday } from '../game/companion';
 import { dailyQuests, type DailyQuest } from '../game/dailyQuests';
 import { addDays, daysBetween, formatLong } from '../game/dates';
 import { dueHabits, isDone, isScheduledOn } from '../game/schedule';
@@ -32,12 +34,15 @@ function HabitGroups({
   date,
   hideDone,
   planned = false,
+  slipped,
 }: {
   habits: Habit[];
   date: DateStr;
   hideDone: boolean;
   /** Shows them as one group: the habits picked for the day on the Plan page. */
   planned?: boolean;
+  /** Habits missed yesterday, to be pointed out. */
+  slipped?: Set<string>;
 }) {
   const data = useGame((s) => s.data);
   const derived = useDerived();
@@ -82,6 +87,7 @@ function HabitGroups({
                     date={date}
                     data={data}
                     streak={derived.streaks[h.id]}
+                    slipped={slipped?.has(h.id)}
                     delay={Math.min(position++ * 35, 420)}
                   />
                 ))}
@@ -295,7 +301,15 @@ function DayPlanCard({ date, isToday, onPlan }: { date: DateStr; isToday: boolea
   );
 }
 
-export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPlan(offset: number): void }) {
+export function Today({
+  onManageHabits,
+  onPlan,
+  onPlanWeek,
+}: {
+  onManageHabits(): void;
+  onPlan(offset: number): void;
+  onPlanWeek(): void;
+}) {
   const data = useGame((s) => s.data);
   const today = useToday();
   const [offset, setOffset] = useState(0);
@@ -329,6 +343,8 @@ export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPl
     (h) => choices.get(h.id) === 'skip' && isScheduledOn(h, date) && !isDone(data, h.id, date),
   );
   const quests = useMemo(() => dailyQuests(data, date), [data, date]);
+  // Missed yesterday and still open today: these are the ones not to miss twice.
+  const slipped = useMemo(() => new Set(offset === 0 ? missedYesterday(data, date).map((h) => h.id) : []), [data, date, offset]);
 
   const doneCount = scheduled.filter((h) => isDone(data, h.id, date)).length;
   const ago = daysBetween(date, today);
@@ -358,7 +374,10 @@ export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPl
       <div className="space-y-4 xl:grid xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start xl:gap-6 xl:space-y-0">
         <aside className="space-y-4 xl:sticky xl:top-20 xl:order-2 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto xl:pr-1">
           <DayCard date={date} isToday={offset === 0} />
+          {offset === 0 && <BossCard date={date} compact />}
+          {offset === 0 && <RoutinesCard date={date} onManage={onManageHabits} />}
           <DayPlanCard date={date} isToday={offset === 0} onPlan={onPlan} />
+          {offset === 0 && <WeekGoalsPanel week={date} onPlanWeek={onPlanWeek} />}
           <DailyQuests quests={quests} />
           {offset === 0 && <SleepQuick />}
           <div className="hidden xl:block">
@@ -400,8 +419,8 @@ export function Today({ onManageHabits, onPlan }: { onManageHabits(): void; onPl
               <Empty>Everything scheduled is done.</Empty>
             ) : (
               <div className="space-y-5">
-                {planned.length > 0 && <HabitGroups habits={planned} date={date} hideDone={hideDone} planned />}
-                <HabitGroups habits={scheduled.filter((h) => !isPlanned(h))} date={date} hideDone={hideDone} />
+                {planned.length > 0 && <HabitGroups habits={planned} date={date} hideDone={hideDone} slipped={slipped} planned />}
+                <HabitGroups habits={scheduled.filter((h) => !isPlanned(h))} date={date} hideDone={hideDone} slipped={slipped} />
               </div>
             )}
             {skipped.length > 0 && (

@@ -223,6 +223,13 @@ function HairPiece({ kind, hair }: { kind: ClipKind; hair: string }) {
           <path d="M41.5 31.5 L42.5 21 L50.5 28 Z M78.5 31.5 L77.5 21 L69.5 28 Z" fill="#ffb3c7" />
         </g>
       );
+    case 'horns':
+      return (
+        <g fill="#e8dcc0" stroke="#a8946a" strokeWidth="0.8" strokeLinejoin="round">
+          <path d="M40.5 34 C33 30 31 20 36 12.5 C38 21 42.5 26 48.5 29 Z" />
+          <path d="M79.5 34 C87 30 89 20 84 12.5 C82 21 77.5 26 71.5 29 Z" />
+        </g>
+      );
     case 'tiara':
       return (
         <g>

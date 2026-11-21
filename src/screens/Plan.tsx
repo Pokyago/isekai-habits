@@ -1,11 +1,11 @@
 import { ArrowRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PlanTick, TimeInput } from '../components/PlanBits';
-import { Button, Field, IconButton, Panel, inputBase, inputClass } from '../components/ui';
+import { Button, Field, IconButton, Panel, Segmented, inputBase, inputClass } from '../components/ui';
 import { WEEKDAY_LABELS } from '../data/meta';
 import { useGame } from '../data/store';
 import type { DateStr, DayPlan, PlanItem } from '../data/types';
-import { addDays, formatLong, formatShort, parseDate, weekday } from '../game/dates';
+import { addDays, daysBetween, formatLong, formatShort, parseDate, weekday } from '../game/dates';
 import { dueHabits } from '../game/schedule';
 import { averageSleep, formatSleep, sleepLogs } from '../health/health';
 import { useToday } from '../hooks';
@@ -26,9 +26,10 @@ import {
 } from '../plan/plan';
 import { HabitBoard, IdeaBoard, QuestBoard } from './PlanBoards';
 import { MealBoard } from './PlanMeals';
+import { PlanWeek } from './PlanWeek';
 
-/** How many days can be planned: today and the six after it. */
-const DAYS = 7;
+/** How many days can be planned one by one: today and the thirteen after it, so all of next week is in reach. */
+const DAYS = 14;
 
 function dayName(offset: number, date: DateStr): string {
   if (offset === 0) return 'Today';
@@ -40,11 +41,13 @@ function dayName(offset: number, date: DateStr): string {
  * Plan a day before it starts. On the left, things to choose from by clicking, as
  * on Today: the day's habits, open quests and ready-made goals. On the right, what
  * has been written down: goals and appointments, meals, when to get up, and a note.
- * It opens on tomorrow; any of the next days can be picked.
+ * It opens on tomorrow; any of the next days can be picked. The Week view lays the
+ * seven days of a week side by side instead.
  */
-export function Plan({ startOn = 1 }: { startOn?: number }) {
+export function Plan({ startOn = 1, startView = 'day' }: { startOn?: number; startView?: 'day' | 'week' }) {
   const data = useGame((s) => s.data);
   const today = useToday();
+  const [view, setView] = useState(startView);
   const [offset, setOffset] = useState(startOn);
   const date = addDays(today, offset);
   const name = dayName(offset, date);
@@ -60,6 +63,26 @@ export function Plan({ startOn = 1 }: { startOn?: number }) {
 
   return (
     <div className="space-y-4">
+      <div className="max-w-xs">
+        <Segmented<'day' | 'week'>
+          label="Plan a day or the week"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'day', label: 'Day' },
+            { value: 'week', label: 'Week' },
+          ]}
+        />
+      </div>
+      {view === 'week' ? (
+        <PlanWeek
+          onOpenDay={(day) => {
+            setOffset(Math.min(DAYS - 1, Math.max(0, daysBetween(today, day))));
+            setView('day');
+          }}
+        />
+      ) : (
+        <>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div key={date} className="animate-fade">
           <h1 className="font-display text-2xl font-bold lg:text-3xl">{name}</h1>
@@ -117,6 +140,8 @@ export function Plan({ startOn = 1 }: { startOn?: number }) {
           <Note key={`note|${date}`} date={date} note={plan.day?.note ?? ''} />
         </aside>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -637,7 +637,7 @@ describe('saving and merging', () => {
     expect(parseSave(JSON.stringify({ version: 2, money: null, transactions: {} }))).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 3, subscriptions: {} }))).toEqual(emptySave());
     expect(parseSave(JSON.stringify({ version: 4, health: {} }))).toEqual(emptySave());
-    expect(() => parseSave(JSON.stringify({ version: 11 }))).toThrow(/newer version/);
+    expect(() => parseSave(JSON.stringify({ version: 12 }))).toThrow(/newer version/);
   });
 });
 

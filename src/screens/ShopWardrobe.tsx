@@ -4,6 +4,7 @@ import { Heroine } from '../components/Heroine';
 import { Button, Panel } from '../components/ui';
 import { CLASSES, statColor } from '../data/meta';
 import { useGame } from '../data/store';
+import { bossesDefeated } from '../game/boss';
 import { ITEMS, SLOTS, itemById, itemsFor, outfitOf, ownedItems, type Item, type Outfit } from '../game/wardrobe';
 import { useDerived } from '../hooks';
 
@@ -21,6 +22,7 @@ export function WardrobePanel() {
 
   const owned = useMemo(() => ownedItems(data), [data]);
   const outfit = useMemo(() => outfitOf(data), [data]);
+  const beaten = useMemo(() => bossesDefeated(data), [data]);
   const accent = statColor(data.hero ? CLASSES[data.hero.heroClass].stat : 'spi');
   const tried = trying && !owned.has(trying) ? itemById(trying) : undefined;
   const shown: Outfit = tried ? { ...outfit, [tried.slot]: tried } : outfit;
@@ -41,7 +43,17 @@ export function WardrobePanel() {
             <Heroine mood="cheerful" accent={accent} tone="var(--color-glow)" outfit={shown} className="size-full" />
           </div>
           <div className="mt-3 min-h-20 text-center" aria-live="polite">
-            {tried ? (
+            {tried && tried.bosses !== undefined ? (
+              <>
+                <p className="text-sm">
+                  Trying on: <strong>{tried.name}</strong>
+                </p>
+                <p className="mt-1.5 text-xs text-mute">
+                  A trophy: it can’t be bought. It is hers once you have beaten {tried.bosses} weekly{' '}
+                  {tried.bosses === 1 ? 'boss' : 'bosses'}. You have beaten {beaten}.
+                </p>
+              </>
+            ) : tried ? (
               <>
                 <p className="text-sm">
                   Trying on: <strong>{tried.name}</strong>
@@ -102,7 +114,13 @@ export function WardrobePanel() {
                           <span className="block truncate text-sm font-medium">{item.name}</span>
                           <span className={`flex items-center gap-1 text-[11px] ${on ? 'text-glow' : has ? 'text-mute' : 'text-gold'}`}>
                             {on && <Check size={11} strokeWidth={3} />}
-                            {on ? 'Wearing' : has ? 'Owned' : `${item.cost} gold`}
+                            {on
+                              ? 'Wearing'
+                              : has
+                                ? 'Owned'
+                                : item.bosses !== undefined
+                                  ? `Beat ${item.bosses} ${item.bosses === 1 ? 'boss' : 'bosses'}`
+                                  : `${item.cost} gold`}
                           </span>
                         </span>
                       </button>

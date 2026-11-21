@@ -1,6 +1,6 @@
-import type { DateStr, SaveData } from '../data/types';
+import type { DateStr, Habit, SaveData } from '../data/types';
 import { addDays, toDateStr } from './dates';
-import { dueHabits, isDone } from './schedule';
+import { dueHabits, isDone, isDueOn } from './schedule';
 
 /**
  * The heroine who stands at the side of every screen. How she feels is worked out
@@ -40,6 +40,8 @@ export interface Companion {
   today: CareDay;
   /** The days before today that she remembers, oldest first. */
   week: CareDay[];
+  /** Habits missed yesterday that are still open today, by name. */
+  slipped: string[];
 }
 
 /**
@@ -56,6 +58,21 @@ export function careDay(data: SaveData, date: DateStr): CareDay {
     if (ticked) done++;
   }
   return { date, due, done };
+}
+
+/**
+ * Habits that were to be done yesterday and weren't, and are to be done again today and
+ * aren't yet. Missing once does little harm; these are the ones about to be missed twice.
+ */
+export function missedYesterday(data: SaveData, today: DateStr): Habit[] {
+  const yesterday = addDays(today, -1);
+  return dueHabits(data, today).filter(
+    (h) =>
+      h.schedule.kind === 'weekdays' &&
+      !isDone(data, h.id, today) &&
+      isDueOn(h, yesterday, data) &&
+      !isDone(data, h.id, yesterday),
+  );
 }
 
 export function moodFor(morale: number): Mood {
@@ -90,7 +107,10 @@ export function companion(data: SaveData, today: DateStr): Companion {
   const now = careDay(data, today);
   const lifted = now.due > 0 ? (past * weight + now.done / now.due) / (weight + 1) : past;
   const morale = Math.round(100 * Math.max(past, lifted));
-  return { morale, mood: moodFor(morale), today: now, week };
+  const slipped = missedYesterday(data, today)
+    .map((h) => h.name)
+    .sort((a, b) => a.localeCompare(b));
+  return { morale, mood: moodFor(morale), today: now, week, slipped };
 }
 
 const LINES: Record<Mood, { allDone: string; some: string; none: string; free: string }> = {
@@ -132,6 +152,11 @@ export function companionLine(c: Companion): string {
   const left = c.today.due - c.today.done;
   if (c.today.due === 0) return lines.free;
   if (left === 0) return lines.allDone;
+  // Something is about to be missed a second day running. When she is worn out she only asks for one habit.
+  if (c.slipped.length > 0 && c.mood !== 'exhausted') {
+    const name = c.slipped[0].length > 30 ? `${c.slipped[0].slice(0, 29).trimEnd()}…` : c.slipped[0];
+    return `“${name}” slipped yesterday. Not twice?`;
+  }
   if (c.today.done === 0) return lines.none;
   return lines.some.replace('{left}', String(left));
 }

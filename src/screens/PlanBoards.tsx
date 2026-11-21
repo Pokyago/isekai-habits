@@ -28,6 +28,7 @@ function PickCard({
   color,
   icon,
   chips,
+  note,
   action,
   onToggle,
   delay = 0,
@@ -41,6 +42,8 @@ function PickCard({
   color: string;
   icon: ReactNode;
   chips?: ReactNode;
+  /** A line under the chips: the reason for a habit, to read before skipping it. */
+  note?: string;
   /** A second control on the right, e.g. Skip. */
   action?: ReactNode;
   onToggle(): void;
@@ -75,6 +78,7 @@ function PickCard({
       <div className="min-w-0 flex-1">
         <p className={`line-clamp-2 text-sm leading-snug font-medium break-words ${faded ? 'text-mute line-through' : ''}`}>{title}</p>
         {chips && <div className="mt-1 flex flex-wrap gap-1.5">{chips}</div>}
+        {note && <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-mute">“{note}”</p>}
       </div>
       {action && (
         <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -177,6 +181,7 @@ export function HabitBoard({ date, isToday }: { date: DateStr; isToday: boolean 
                       faded={isSkipped}
                       color={statColor(h.stat)}
                       icon={<StatIcon stat={h.stat} size={18} />}
+                      note={h.why}
                       delay={nextDelay()}
                       onToggle={() => setHabitChoice(h.id, date, isPicked || isSkipped ? null : 'pick')}
                       chips={

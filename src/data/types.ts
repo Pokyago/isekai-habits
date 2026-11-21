@@ -28,6 +28,8 @@ export interface Habit {
   schedule: Schedule;
   /** How many times it must be ticked in a day to count as done (1 for a simple check). */
   target: number;
+  /** Why you want this habit, in your own words. Shown when it slipped, or when you are about to skip it. */
+  why?: string;
   startDate: DateStr;
   archivedOn: DateStr | null;
   deleted: boolean;
@@ -145,6 +147,32 @@ export interface DayPlan {
   wake: string | null;
   bed: string | null;
   note: string;
+  updatedAt: number;
+}
+
+/** A goal that belongs to a whole week rather than to one day. A week has up to three. */
+export interface WeekGoal {
+  id: string;
+  /** The Monday of its week. */
+  week: DateStr;
+  title: string;
+  /** Achieved. XP and gold are fixed at that moment. */
+  done: boolean;
+  doneDate: DateStr | null;
+  xp: number;
+  gold: number;
+  createdAt: number;
+  deleted: boolean;
+  updatedAt: number;
+}
+
+/** A short list of habits done one after another, such as a morning routine. */
+export interface Routine {
+  id: string;
+  name: string;
+  /** The habits, in the order they are done. */
+  habitIds: string[];
+  deleted: boolean;
   updatedAt: number;
 }
 
@@ -358,12 +386,12 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 10;
+  version: 11;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
   quests: Record<string, Quest>;
-  /** Rewards already given: daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) weekly health check-ins (`health|monday`), nightly sleep logs (`sleep|date`) and planning a day ahead (`plan|date`). */
+  /** Rewards already given: the weekly boss's chest (`boss|monday`), planning a week (`weekplan|monday`), daily quests (`date|slot`), money rewards (`ledger|date`, `budget|month`, `goal|id`, `debt|id`) weekly health check-ins (`health|monday`), nightly sleep logs (`sleep|date`) and planning a day ahead (`plan|date`). */
   claims: Record<string, QuestClaim>;
   rewards: Record<string, Reward>;
   purchases: Record<string, Purchase>;
@@ -388,4 +416,8 @@ export interface SaveData {
   meals: Record<string, Meal>;
   /** What the heroine is wearing. Null until something is changed. */
   wardrobe: Wardrobe | null;
+  /** Goals for a whole week. */
+  weekGoals: Record<string, WeekGoal>;
+  /** Habits grouped to be done one after another. */
+  routines: Record<string, Routine>;
 }

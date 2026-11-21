@@ -6,6 +6,7 @@ import { CHART_COLORS, LineChart } from '../components/LineChart';
 import { Bar, Empty, IconButton, Panel } from '../components/ui';
 import { CLASSES, statColor } from '../data/meta';
 import { useGame } from '../data/store';
+import { bossFor } from '../game/boss';
 import { MOODS, moodFor } from '../game/companion';
 import { addDays, formatShort, weekStart } from '../game/dates';
 import { firstWeek, moraleHistory, weekReview, weekVerdict } from '../game/review';
@@ -29,6 +30,7 @@ export function Review() {
   const week = useMemo(() => weekReview(data, start, today), [data, start, today]);
   const before = useMemo(() => weekReview(data, addDays(start, -7), today), [data, start, today]);
   const history = useMemo(() => moraleHistory(data, today), [data, today]);
+  const boss = useMemo(() => bossFor(data, start, today), [data, start, today]);
   const outfit = useMemo(() => outfitOf(data), [data]);
   const canGoBack = addDays(start, -7) >= firstWeek(data, today);
 
@@ -95,6 +97,11 @@ export function Review() {
               )}
             </Tile>
             <Tile label="Flawless days" value={week.flawless} />
+            {boss && (
+              <Tile label="Weekly boss" value={boss.defeated ? 'Defeated' : boss.daysLeft > 0 ? `${boss.hp} HP left` : 'Got away'}>
+                {boss.name}
+              </Tile>
+            )}
             <Tile label="XP earned" value={week.xp.toLocaleString()} />
             <Tile label="Quests finished" value={week.quests} />
             <Tile label="Main goals" value={week.goalsSet === 0 ? '–' : `${week.goalsMet}/${week.goalsSet}`}>

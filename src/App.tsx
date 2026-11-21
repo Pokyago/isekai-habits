@@ -67,12 +67,22 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today');
   // Which day the Plan page opens on: 1 is tomorrow, 0 is today.
   const [planStart, setPlanStart] = useState(1);
+  // Whether it opens on one day or on the whole week.
+  const [planView, setPlanView] = useState<'day' | 'week'>('day');
   const openPlan = (offset: number) => {
     setPlanStart(offset);
+    setPlanView('day');
+    setTab('plan');
+  };
+  const openWeek = () => {
+    setPlanView('week');
     setTab('plan');
   };
   const select = (next: Tab) => {
-    if (next === 'plan') setPlanStart(1);
+    if (next === 'plan') {
+      setPlanStart(1);
+      setPlanView('day');
+    }
     setTab(next);
   };
 
@@ -130,8 +140,8 @@ export default function App() {
       <div className={`mx-auto px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:px-8 lg:pt-6 lg:pb-12 ${WIDTH[tab]}`}>
         {tab !== 'settings' && <SyncNotice onOpenSettings={() => setTab('settings')} />}
         <main key={tab} className="animate-fade">
-          {tab === 'today' && <Today onManageHabits={() => setTab('habits')} onPlan={openPlan} />}
-          {tab === 'plan' && <Plan startOn={planStart} />}
+          {tab === 'today' && <Today onManageHabits={() => setTab('habits')} onPlan={openPlan} onPlanWeek={openWeek} />}
+          {tab === 'plan' && <Plan startOn={planStart} startView={planView} />}
           {tab === 'hero' && <HeroPage />}
           {tab === 'health' && <Health />}
           {tab === 'habits' && <Habits />}

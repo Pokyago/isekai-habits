@@ -13,12 +13,15 @@ export function HabitCard({
   date,
   data,
   streak,
+  slipped = false,
   delay = 0,
 }: {
   habit: Habit;
   date: DateStr;
   data: SaveData;
   streak: HabitStreak | undefined;
+  /** It was missed yesterday and is still open: the one not to miss twice. */
+  slipped?: boolean;
   /** Milliseconds to wait before the card appears, so a list arrives one after another. */
   delay?: number;
 }) {
@@ -126,6 +129,12 @@ export function HabitCard({
           <Chip>{DIFFICULTIES[habit.difficulty].name}</Chip>
           <Chip>{weekly ? `${Math.min(doneThisWeek, weekly)}/${weekly} this week` : scheduleLabel(habit.schedule)}</Chip>
         </div>
+        {slipped && !done && (
+          <p className="mt-1 text-[11px] leading-snug text-gold">
+            Missed yesterday. Not twice.
+            {habit.why && <span className="text-mute"> “{habit.why}”</span>}
+          </p>
+        )}
       </div>
 
       {counted && count > 0 && (

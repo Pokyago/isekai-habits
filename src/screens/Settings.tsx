@@ -119,6 +119,19 @@ export function Settings() {
             do it and costs nothing if you don’t. Picking a habit as a priority only changes where it is listed.
           </li>
           <li>
+            The week: up to three goals for the week, each worth as much as a Medium quest in Focus XP. Planning a week
+            before its Monday is over (a goal for the week and a main goal on at least three days) earns +30 Focus XP
+            and +15 gold.
+          </li>
+          <li>
+            Weekly boss: each habit you do in a week hurts it: Trivial 1, Easy 2, Medium 3, Hard 5. It has 70% of
+            what the week’s habits could do, so it falls without a perfect week. Beating it by Sunday gives +60 XP and
+            +80 gold; if it survives, nothing is lost. Bosses beaten unlock trophies for your heroine in the Shop.
+          </li>
+          <li>
+            Routines only put your habits in an order to run through; they earn nothing of their own.
+          </li>
+          <li>
             Meals: each meal you planned and then tick as eaten is worth as much as a Trivial quest, in Vitality XP.
             A meal that went differently costs nothing.
           </li>

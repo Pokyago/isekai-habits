@@ -29,6 +29,7 @@ export function HabitForm({
   );
   const [times, setTimes] = useState(habit?.schedule.kind === 'perWeek' ? habit.schedule.times : 3);
   const [target, setTarget] = useState(habit?.target ?? 1);
+  const [why, setWhy] = useState(habit?.why ?? '');
 
   const valid = name.trim().length > 0 && (kind === 'perWeek' || days.length > 0);
 
@@ -43,6 +44,7 @@ export function HabitForm({
       difficulty,
       schedule: kind === 'weekdays' ? { kind, days } : { kind, times },
       target,
+      why,
     });
     onClose();
   };
@@ -64,6 +66,16 @@ export function HabitForm({
             placeholder="e.g. Read for 20 minutes"
             maxLength={80}
             autoFocus={!habit}
+          />
+        </Field>
+
+        <Field label="Why do you want this? (optional)">
+          <input
+            className={inputClass}
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            placeholder="e.g. To have energy in the afternoon"
+            maxLength={140}
           />
         </Field>
 

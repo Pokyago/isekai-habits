@@ -9,6 +9,7 @@ import { useGame } from '../data/store';
 import { ALL_TEMPLATES, categoryOf } from '../data/templates';
 import type { Habit } from '../data/types';
 import { scheduleLabel } from '../game/schedule';
+import { RoutineManager } from './Routines';
 
 export function Habits() {
   const habits = useGame((s) => s.data.habits);
@@ -42,6 +43,8 @@ export function Habits() {
           <Empty>No habits yet. Pick some from the library, or create your own.</Empty>
         </Panel>
       )}
+
+      <RoutineManager />
 
       <div className="grid items-start gap-4 lg:grid-cols-2 3xl:grid-cols-3">
       {HABIT_CATEGORIES.map((category) => {
