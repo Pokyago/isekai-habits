@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CreditCard, FileUp } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Button, Empty, IconButton, Modal, Panel } from '../../components/ui';
 import { useFx } from '../../data/fx';
@@ -19,7 +19,13 @@ export function TxRow({ tx, onEdit }: { tx: Transaction; onEdit(tx: Transaction)
   const tags = [
     tx.note && tx.note !== categoryName(tx.category) ? categoryName(tx.category) : null,
     tx.source === 'recurring' ? 'automatic' : tx.source === 'import' ? 'from bank file' : null,
-    countsInBalance(data, tx) ? null : 'before starting balance',
+    tx.cardId
+      ? `${data.cards[tx.cardId]?.name ?? 'Card'}${tx.plan ? ` · part ${tx.plan.part} of ${tx.plan.of}` : ''}`
+      : tx.paysBill
+        ? 'card bill paid'
+        : countsInBalance(data, tx)
+          ? null
+          : 'before starting balance',
   ].filter(Boolean);
 
   return (
@@ -32,6 +38,11 @@ export function TxRow({ tx, onEdit }: { tx: Transaction; onEdit(tx: Transaction)
         <span className="block truncate text-sm">{tx.note || categoryName(tx.category)}</span>
         {tags.length > 0 && <span className="block truncate text-[11px] text-mute">{tags.join(' · ')}</span>}
       </span>
+      {tx.cardId && (
+        <span className="shrink-0 text-mute" title="On the credit card: not out of the bank yet">
+          <CreditCard size={15} aria-label="On the credit card" />
+        </span>
+      )}
       <span className="shrink-0 text-sm font-semibold tabular-nums" style={income ? { color: 'var(--stat-vit)' } : undefined}>
         {income ? '+' : '−'}
         {fmt(tx.amount)}
@@ -145,7 +156,8 @@ export function Transactions({ onEdit }: { onEdit(tx: Transaction): void }) {
       </Panel>
       <p className="px-1 text-xs text-mute">
         “Import bank file” reads an Itaú account statement saved as PDF, or an OFX file from any bank. The file is read
-        on this device and never uploaded. “Spent” leaves out debt payments and savings.
+        on this device and never uploaded. “Money out” is what left the bank. “Spent” leaves out debt payments, savings
+        and card bills paid, and counts what you bought on the card.
       </p>
 
       {pending && <ImportDialog rows={pending.rows} statement={pending.statement} onClose={() => setPending(null)} />}

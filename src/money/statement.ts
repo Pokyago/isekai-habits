@@ -73,7 +73,8 @@ export function planImport(data: SaveData, statement: Statement): ImportRow[] {
       used.add(r.id);
     }
   }
-  const existing = Object.values(data.transactions).filter((t) => !t.deleted);
+  // A bank statement never shows what was bought on a credit card, only the bill being paid.
+  const existing = Object.values(data.transactions).filter((t) => !t.deleted && !t.cardId);
   for (const r of rows) {
     if (r.status !== 'new') continue;
     const twin = existing.find(

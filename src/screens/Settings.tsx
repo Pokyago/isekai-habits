@@ -98,6 +98,11 @@ export function Settings() {
             {MILESTONE_REWARD.xp} XP and +{MILESTONE_REWARD.gold} gold. Game gold and real money are never mixed.
           </li>
           <li>
+            Credit card: what you buy on it counts against the budget on the day you buy it (each instalment in its
+            own month), and your bank balance only changes when you pay the bill. Paying the bill is not counted as
+            spending again.
+          </li>
+          <li>
             Health: the first check-in of each week gives +{HEALTH_REWARD.xp} Vitality XP and +{HEALTH_REWARD.gold}{' '}
             gold, and logging last night’s sleep gives +{SLEEP_REWARD.xp} XP and +{SLEEP_REWARD.gold} gold. Nothing depends on
             what the numbers are.

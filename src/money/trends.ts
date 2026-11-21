@@ -76,7 +76,7 @@ export function categoryTotals(data: SaveData, months: MonthStr[]): { category: 
   const wanted = new Set(months);
   const totals = new Map<string, number>();
   for (const t of activeTransactions(data)) {
-    if (t.kind !== 'expense' || t.category === ADJUSTMENT || !wanted.has(monthOf(t.date))) continue;
+    if (t.kind !== 'expense' || t.category === ADJUSTMENT || t.paysBill || !wanted.has(monthOf(t.date))) continue;
     totals.set(t.category, (totals.get(t.category) ?? 0) + t.amount);
   }
   return [...totals.entries()].map(([category, total]) => ({ category, total })).sort((a, b) => b.total - a.total);
@@ -87,7 +87,7 @@ export function categoryByMonth(data: SaveData, category: string, months: MonthS
   const index = new Map(months.map((m, i) => [m, i]));
   const out = months.map(() => 0);
   for (const t of activeTransactions(data)) {
-    if (t.kind !== 'expense' || t.category !== category) continue;
+    if (t.kind !== 'expense' || t.category !== category || t.paysBill) continue;
     const i = index.get(monthOf(t.date));
     if (i !== undefined) out[i] += t.amount;
   }

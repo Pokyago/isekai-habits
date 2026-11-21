@@ -2,7 +2,7 @@ import type { SaveData } from './types';
 
 export function emptySave(): SaveData {
   return {
-    version: 9,
+    version: 10,
     hero: null,
     habits: {},
     completions: {},
@@ -12,6 +12,7 @@ export function emptySave(): SaveData {
     purchases: {},
     money: null,
     transactions: {},
+    cards: {},
     recurring: {},
     subscriptions: {},
     goals: {},
@@ -61,7 +62,7 @@ function mergeMap<T extends { updatedAt: number }>(a: Record<string, T>, b: Reco
  */
 export function mergeSaves(a: SaveData, b: SaveData): SaveData {
   return {
-    version: 9,
+    version: 10,
     hero: a.hero && b.hero ? newer(a.hero, b.hero) : (a.hero ?? b.hero),
     habits: mergeMap(a.habits, b.habits),
     completions: mergeMap(a.completions, b.completions),
@@ -71,6 +72,7 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     purchases: mergeMap(a.purchases, b.purchases),
     money: a.money && b.money ? newer(a.money, b.money) : (a.money ?? b.money),
     transactions: mergeMap(a.transactions, b.transactions),
+    cards: mergeMap(a.cards, b.cards),
     recurring: mergeMap(a.recurring, b.recurring),
     subscriptions: mergeMap(a.subscriptions, b.subscriptions),
     goals: mergeMap(a.goals, b.goals),
@@ -102,13 +104,13 @@ export function parseSave(text: string): SaveData {
     throw new Error('This file is not a valid Isekai Habits save.');
   }
   // A newer app may store things this one doesn't know about; writing the file back would lose them.
-  if (raw.version > 9) {
+  if (raw.version > 10) {
     throw new Error('This save was made by a newer version of Isekai Habits. Update the app on this device first.');
   }
-  // Older saves simply lack the newer collections: version 1 has no money records, version 2 no subscriptions, version 3 no health check-ins, version 4 no sleep log, version 5 no day plans, version 6 no habit choices, version 7 no meals, version 8 no wardrobe.
+  // Older saves simply lack the newer collections: version 1 has no money records, version 2 no subscriptions, version 3 no health check-ins, version 4 no sleep log, version 5 no day plans, version 6 no habit choices, version 7 no meals, version 8 no wardrobe, version 9 no credit cards.
   const map = (key: string) => (isRecord(raw[key]) ? raw[key] : {});
   return {
-    version: 9,
+    version: 10,
     hero: isRecord(raw.hero) ? (raw.hero as unknown as SaveData['hero']) : null,
     habits: map('habits') as SaveData['habits'],
     completions: map('completions') as SaveData['completions'],
@@ -118,6 +120,7 @@ export function parseSave(text: string): SaveData {
     purchases: map('purchases') as SaveData['purchases'],
     money: isRecord(raw.money) ? (raw.money as unknown as SaveData['money']) : null,
     transactions: map('transactions') as SaveData['transactions'],
+    cards: map('cards') as SaveData['cards'],
     recurring: map('recurring') as SaveData['recurring'],
     subscriptions: map('subscriptions') as SaveData['subscriptions'],
     goals: map('goals') as SaveData['goals'],

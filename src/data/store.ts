@@ -16,9 +16,11 @@ import * as plan from '../plan/plan';
 import type { PlanInput } from '../plan/plan';
 import * as money from '../money/actions';
 import type { DebtInput, GoalInput, RecurringInput, SubscriptionInput, TxInput } from '../money/actions';
+import * as cards from '../money/cardActions';
+import type { CardInput, PurchaseInput } from '../money/cardActions';
 import type { ImportRow } from '../money/statement';
 import type { HabitTemplate } from './templates';
-import type { DateStr, Difficulty, HeroClass, MealSlot, SaveData, StatKey } from './types';
+import type { DateStr, Difficulty, HeroClass, MealSlot, MonthStr, SaveData, StatKey } from './types';
 
 const DB_KEY = 'isekai-habits-save';
 
@@ -62,6 +64,14 @@ interface GameState {
   saveDebt(input: DebtInput, id?: string): void;
   deleteDebt(id: string): void;
   importRows(rows: ImportRow[]): void;
+  // Credit cards
+  saveCard(input: CardInput, id?: string): void;
+  deleteCard(id: string): void;
+  /** Something bought on a card, in one or more monthly parts. */
+  addPurchase(input: PurchaseInput): void;
+  /** Removes every part of a purchase made in instalments. */
+  deletePlan(planId: string): void;
+  payBill(cardId: string, month: MonthStr, amount: number, date: DateStr): void;
   // Health
   saveCheckIn(input: CheckInInput): void;
   deleteCheckIn(id: string): void;
@@ -247,6 +257,21 @@ export const useGame = create<GameState>((set, get) => {
     },
     deleteDebt(id) {
       applyMoney((d) => money.deleteDebt(d, id, Date.now()));
+    },
+    saveCard(input, id) {
+      apply((d) => cards.saveCard(d, input, id, Date.now()));
+    },
+    deleteCard(id) {
+      apply((d) => cards.deleteCard(d, id, Date.now()));
+    },
+    addPurchase(input) {
+      applyMoney((d) => cards.addPurchase(d, input, todayStr(), Date.now()));
+    },
+    deletePlan(planId) {
+      applyMoney((d) => cards.deletePlan(d, planId, Date.now()));
+    },
+    payBill(cardId, month, amount, date) {
+      applyMoney((d) => cards.payBill(d, cardId, month, amount, date, todayStr(), Date.now()));
     },
     importRows(rows) {
       applyMoney((d) => money.importRows(d, rows, todayStr(), Date.now()));

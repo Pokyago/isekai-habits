@@ -236,6 +236,34 @@ export interface Transaction {
   /** A debt this payment went to, if any. */
   debtId: string | null;
   source: 'manual' | 'recurring' | 'import';
+  /**
+   * Bought on this credit card. It is spending on its date, but it doesn't touch the
+   * bank balance: the money leaves when the card's bill is paid.
+   */
+  cardId?: string;
+  /** For a card purchase: the bill it is on, named by the month the bill is due in. */
+  bill?: MonthStr;
+  /** For a card purchase paid in instalments: the purchase it is a part of, and which part. */
+  plan?: { id: string; part: number; of: number };
+  /**
+   * This entry pays a card's bill from the bank account: `${cardId}|${month the bill is due}`.
+   * It leaves the bank, but it is not spending: the purchases on the bill were.
+   */
+  paysBill?: string;
+  deleted: boolean;
+  updatedAt: number;
+}
+
+/** A credit card. Its bills are worked out from these two days. */
+export interface Card {
+  id: string;
+  name: string;
+  /** The day of the month the bill closes, 1–31. A purchase on this day or later goes on the next bill. */
+  closingDay: number;
+  /** The day of the month the bill is due, 1–31. */
+  dueDay: number;
+  /** The credit limit in cents, or null when it isn't tracked. */
+  limit: number | null;
   deleted: boolean;
   updatedAt: number;
 }
@@ -323,7 +351,7 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 9;
+  version: 10;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
@@ -334,6 +362,8 @@ export interface SaveData {
   purchases: Record<string, Purchase>;
   money: MoneySettings | null;
   transactions: Record<string, Transaction>;
+  /** Credit cards. What was bought on them is in the transactions. */
+  cards: Record<string, Card>;
   recurring: Record<string, Recurring>;
   subscriptions: Record<string, Subscription>;
   goals: Record<string, Goal>;

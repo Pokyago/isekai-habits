@@ -96,7 +96,7 @@ export function weekReview(data: SaveData, anyDay: DateStr, today: DateStr): Wee
   if (data.money) {
     money = { spent: 0, income: 0 };
     for (const t of activeTransactions(data)) {
-      if (!within(t.date) || t.category === ADJUSTMENT) continue;
+      if (!within(t.date) || t.category === ADJUSTMENT || t.paysBill) continue;
       if (t.kind === 'income') money.income += t.amount;
       // As on the Money page: debt payments and savings are not spending.
       else if (!NOT_SPENDING.has(t.category)) money.spent += t.amount;

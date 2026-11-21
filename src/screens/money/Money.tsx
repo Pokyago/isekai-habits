@@ -4,6 +4,7 @@ import { Bar, Button, Empty, Field, Panel, Segmented, inputClass } from '../../c
 import { useGame } from '../../data/store';
 import type { Transaction } from '../../data/types';
 import { daysBetween } from '../../game/dates';
+import { activeCards, billsToPay, cardsOwed } from '../../money/cards';
 import { BUDGET_REWARD, LEDGER_REWARD } from '../../money/actions';
 import type { TxInput } from '../../money/actions';
 import { activeTransactions, balance, budgetStatus, monthSummary } from '../../money/calc';
@@ -11,12 +12,13 @@ import { categoryName } from '../../money/categories';
 import { CURRENCIES, DEFAULT_CURRENCY, formatMonth, monthOf, parseAmount } from '../../money/format';
 import { fixedCosts, upcomingCharges } from '../../money/subscriptions';
 import { AmountInput, BalanceForm, BudgetForm, Stats, TransactionForm, useMoney } from './forms';
+import { CreditCards } from './Cards';
 import { Charts } from './Charts';
 import { DebtList, GoalList, Plans } from './Plans';
 import { FixedCosts, MonthlyExpenses, inDays } from './Subscriptions';
 import { Transactions, TxRow } from './Transactions';
 
-type View = 'overview' | 'entries' | 'charts' | 'plans' | 'expenses';
+type View = 'overview' | 'entries' | 'charts' | 'plans' | 'expenses' | 'card';
 
 export function Money() {
   const hasMoney = useGame((s) => s.data.money !== null);
@@ -37,7 +39,7 @@ export function Money() {
           <Plus size={16} /> Add entry
         </Button>
       </div>
-      <div className="max-w-4xl">
+      <div className="max-w-5xl">
       <Segmented<View>
         label="Money section"
         value={view}
@@ -48,6 +50,7 @@ export function Money() {
           { value: 'charts', label: 'Charts' },
           { value: 'plans', label: 'Debts & goals' },
           { value: 'expenses', label: 'Monthly expenses' },
+          { value: 'card', label: 'Credit card' },
         ]}
       />
       </div>
@@ -59,6 +62,7 @@ export function Money() {
       {view === 'charts' && <Charts />}
       {view === 'plans' && <Plans onAdd={add} />}
       {view === 'expenses' && <MonthlyExpenses />}
+      {view === 'card' && <CreditCards onAdd={add} onEdit={edit} />}
 
       {form && <TransactionForm tx={form.tx} initial={form.initial} onClose={() => setForm(null)} />}
     </div>
@@ -157,6 +161,11 @@ function Overview({
   );
   const net = summary.income - summary.out;
   const top = summary.byCategory[0]?.amount ?? 0;
+  const spentInAll = summary.byCategory.reduce((n, c) => n + c.amount, 0);
+  const hasCards = useMemo(() => activeCards(data).length > 0, [data]);
+  const owed = useMemo(() => cardsOwed(data, today), [data, today]);
+  // Card bills that have closed and are due in the next two weeks (or already were).
+  const billsSoon = useMemo(() => billsToPay(data, today).filter((b) => daysBetween(today, b.due) <= 14), [data, today]);
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -178,6 +187,22 @@ function Overview({
             ]}
           />
         </div>
+        {hasCards && (
+          <button
+            type="button"
+            onClick={() => onOpen('card')}
+            className="-mx-2 mt-3 flex w-[calc(100%+1rem)] flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-raise"
+          >
+            <span>
+              <span className="text-mute">On the card so far </span>
+              <strong className="tabular-nums">{fmt(owed.now)}</strong>
+            </span>
+            <span>
+              <span className="text-mute">Left after paying it </span>
+              <strong className={`tabular-nums ${total - owed.now < 0 ? 'text-danger' : ''}`}>{fmt(total - owed.now)}</strong>
+            </span>
+          </button>
+        )}
       </Panel>
 
       <Panel
@@ -231,7 +256,7 @@ function Overview({
                 <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
                   <span>{categoryName(c.category)}</span>
                   <span className="text-mute tabular-nums">
-                    {fmt(c.amount)} · {Math.round((c.amount / summary.out) * 100)}%
+                    {fmt(c.amount)} · {Math.round((c.amount / spentInAll) * 100)}%
                   </span>
                 </div>
                 <Bar value={c.amount} max={top} color="var(--stat-foc)" className="h-1.5" />
@@ -252,9 +277,21 @@ function Overview({
 
       {fixed.perMonth > 0 && <FixedCosts onOpen={onOpen} className="lg:col-span-2" />}
 
-      {dueSoon.length > 0 && (
+      {(dueSoon.length > 0 || billsSoon.length > 0) && (
         <Panel title="Due in the next two weeks">
           <ul className="space-y-1 text-sm">
+            {billsSoon.map((b) => {
+              const days = daysBetween(today, b.due);
+              return (
+                <li key={`${b.card.id}|${b.month}`} className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate">
+                    {b.card.name} bill{' '}
+                    <span className={`text-xs ${days < 0 ? 'text-danger' : 'text-mute'}`}>{days < 0 ? 'overdue' : inDays(days)}</span>
+                  </span>
+                  <span className="shrink-0 text-mute tabular-nums">{fmt(b.left)}</span>
+                </li>
+              );
+            })}
             {dueSoon.map(({ sub, date }) => (
               <li key={sub.id} className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate">

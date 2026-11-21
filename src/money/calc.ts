@@ -8,9 +8,12 @@ export function activeTransactions(data: SaveData): Transaction[] {
 
 const signed = (t: Transaction) => (t.kind === 'income' ? t.amount : -t.amount);
 
-/** Whether a transaction changes the bank balance: only those on or after the opening date do. */
+/**
+ * Whether a transaction changes the bank balance: only those on or after the opening
+ * date do, and never something bought on a credit card (paying the card's bill does).
+ */
 export function countsInBalance(data: SaveData, t: Transaction): boolean {
-  return data.money !== null && !t.deleted && t.date >= data.money.openingDate;
+  return data.money !== null && !t.deleted && !t.cardId && t.date >= data.money.openingDate;
 }
 
 /** The bank balance at the end of `asOf`: the opening balance plus everything since. */
@@ -25,10 +28,15 @@ export function balance(data: SaveData, asOf: DateStr): number {
 
 export interface MonthSummary {
   income: number;
-  /** Everything that went out, including debt payments and savings. */
+  /** Everything that left the bank account, including debt payments, savings and card bills paid. */
   out: number;
-  /** What counts against the budget: money out, minus debt payments, savings and corrections. */
+  /**
+   * What counts against the budget: what was spent from the bank and on credit cards,
+   * without debt payments, savings, corrections or the paying of card bills.
+   */
   spent: number;
+  /** Of that, what was bought on credit cards. */
+  onCard: number;
   byCategory: { category: string; amount: number }[];
   count: number;
 }
@@ -37,6 +45,7 @@ export function monthSummary(data: SaveData, month: MonthStr): MonthSummary {
   let income = 0;
   let out = 0;
   let spent = 0;
+  let onCard = 0;
   let count = 0;
   const cats = new Map<string, number>();
   for (const t of activeTransactions(data)) {
@@ -46,14 +55,21 @@ export function monthSummary(data: SaveData, month: MonthStr): MonthSummary {
       income += t.amount;
       continue;
     }
-    out += t.amount;
+    // Paying a card's bill leaves the bank, but what it paid for was already counted when it was bought.
+    if (t.paysBill) {
+      out += t.amount;
+      continue;
+    }
+    // Bought on a card: spending now, out of the bank only when the bill is paid.
+    if (t.cardId) onCard += t.amount;
+    else out += t.amount;
     if (!NOT_SPENDING.has(t.category)) spent += t.amount;
     cats.set(t.category, (cats.get(t.category) ?? 0) + t.amount);
   }
   const byCategory = [...cats.entries()]
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
-  return { income, out, spent, byCategory, count };
+  return { income, out, spent, onCard, byCategory, count };
 }
 
 export interface BudgetStatus {

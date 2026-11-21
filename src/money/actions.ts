@@ -13,6 +13,7 @@ import type {
 } from '../data/types';
 import { addDays, parseDate } from '../game/dates';
 import { balance, debtRemaining, goalSaved, monthSummary } from './calc';
+import { billFor } from './cards';
 import { ADJUSTMENT } from './categories';
 import { addMonths, dayInMonth, monthOf } from './format';
 import type { ImportRow } from './statement';
@@ -51,6 +52,11 @@ function decide(data: SaveData, id: string, date: DateStr, reward: { xp: number;
   return { ...data, claims: { ...data.claims, [id]: claim } };
 }
 
+/** The small reward for the first thing recorded on a day. */
+export function ledgerReward(data: SaveData, today: DateStr, now: number): SaveData {
+  return decide(data, `ledger|${today}`, today, LEDGER_REWARD, now);
+}
+
 export function setupMoney(
   data: SaveData,
   openingBalance: number,
@@ -78,22 +84,35 @@ export interface TxInput {
   note: string;
   goalId: string | null;
   debtId: string | null;
+  /** Bought on this credit card (see cards.ts); null or left out for the bank account. */
+  cardId?: string | null;
+  /** For a card purchase: the bill it goes on. Worked out from the date when left out. */
+  bill?: MonthStr;
+  /** This entry pays that card bill (`${cardId}|${month}`); null or left out when it doesn't. */
+  paysBill?: string | null;
 }
 
 export function saveTransaction(data: SaveData, input: TxInput, id: string | undefined, today: DateStr, now: number): SaveData {
   if (!data.money || !(input.amount > 0)) return data;
   const prev = id ? data.transactions[id] : undefined;
+  const { cardId, bill, paysBill, ...rest } = input;
+  const card = cardId && input.kind === 'expense' ? data.cards[cardId] : undefined;
   const tx: Transaction = {
     id: prev?.id ?? newId(),
-    ...input,
+    ...rest,
     amount: Math.round(input.amount),
     note: input.note.trim(),
     source: prev?.source ?? 'manual',
+    ...(card
+      ? { cardId: card.id, bill: bill ?? billFor(card, input.date), ...(prev?.plan ? { plan: prev.plan } : {}) }
+      : paysBill && input.kind === 'expense'
+        ? { paysBill }
+        : {}),
     deleted: false,
     updatedAt: stamp(prev, now),
   };
   const next = { ...data, transactions: { ...data.transactions, [tx.id]: tx } };
-  return prev ? next : decide(next, `ledger|${today}`, today, LEDGER_REWARD, now);
+  return prev ? next : ledgerReward(next, today, now);
 }
 
 export function deleteTransaction(data: SaveData, id: string, now: number): SaveData {

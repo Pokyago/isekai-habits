@@ -4,6 +4,7 @@ import { addDays } from '../game/dates';
 import { completionId, type DayChoice } from '../game/schedule';
 import { questReward, type RewardAmount } from '../game/xp';
 import { dayInMonth, monthOf } from '../money/format';
+import { billsToPay } from '../money/cards';
 import { activeSubscriptions, isFloating, nextCharge } from '../money/subscriptions';
 import { mealsFor } from './meals';
 
@@ -149,7 +150,7 @@ export interface MoneyDue {
   onCard: boolean;
 }
 
-/** Monthly items and subscription charges that fall on a date, biggest first. */
+/** Monthly items, subscription charges and credit card bills that fall on a date, biggest first. */
 export function moneyDue(data: SaveData, date: DateStr): MoneyDue[] {
   if (!data.money) return [];
   const month = monthOf(date);
@@ -163,6 +164,12 @@ export function moneyDue(data: SaveData, date: DateStr): MoneyDue[] {
   for (const s of activeSubscriptions(data)) {
     if (!isFloating(s) && nextCharge(s, date) === date) {
       due.push({ id: s.id, name: s.name, amount: s.amount, kind: 'expense', onCard: s.paidWith === 'card' });
+    }
+  }
+  // A card bill that has closed and is due that day, with what is still to pay on it.
+  for (const bill of billsToPay(data, date)) {
+    if (bill.due === date) {
+      due.push({ id: `bill|${bill.card.id}|${bill.month}`, name: `${bill.card.name} bill`, amount: bill.left, kind: 'expense', onCard: false });
     }
   }
   return due.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));

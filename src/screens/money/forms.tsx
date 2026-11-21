@@ -1,14 +1,15 @@
 import { Trash2 } from 'lucide-react';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { DateField } from '../../components/DateField';
 import { Button, Field, Modal, Segmented, inputClass } from '../../components/ui';
 import { useGame } from '../../data/store';
 import type { Debt, Goal, Recurring, Transaction, TxKind } from '../../data/types';
-import { formatLong } from '../../game/dates';
+import { formatLong, formatShort } from '../../game/dates';
 import { useToday } from '../../hooks';
 import { BUDGET_REWARD } from '../../money/actions';
 import type { TxInput } from '../../money/actions';
 import { balance, debtRemaining } from '../../money/calc';
+import { activeCards, billDates, billFor, billKey, cardBills } from '../../money/cards';
 import { categoriesFor, defaultCategory } from '../../money/categories';
 import { CURRENCIES, DEFAULT_CURRENCY, addMonths, amountText, formatMoney, monthOf, parseAmount } from '../../money/format';
 
@@ -43,7 +44,7 @@ export function Stats({ items, tone = 'void' }: { items: readonly (readonly [lab
 }
 
 /** State for an amount box: the typed text and what it parses to (null if it isn't a number). */
-function useAmount(initial: number | null | undefined, currency: string) {
+export function useAmount(initial: number | null | undefined, currency: string) {
   const [text, setText] = useState(initial != null && initial > 0 ? amountText(initial, currency) : '');
   return { text, setText, value: text.trim() === '' ? null : parseAmount(text, currency) };
 }
@@ -84,17 +85,19 @@ function FormButtons({
   onDelete,
   valid,
   saveLabel,
+  deleteLabel = 'Delete',
 }: {
   onClose(): void;
   onDelete?: () => void;
   valid: boolean;
   saveLabel: string;
+  deleteLabel?: string;
 }) {
   return (
     <div className="flex items-center gap-2 pt-1">
       {onDelete && (
         <Button variant="danger" onClick={onDelete}>
-          <Trash2 size={16} /> Delete
+          <Trash2 size={16} /> {deleteLabel}
         </Button>
       )}
       <span className="flex-1" />
@@ -174,11 +177,14 @@ export function TransactionForm({
   initial?: Partial<TxInput>;
   onClose(): void;
 }) {
-  const { data, today, currency } = useMoney();
+  const { data, today, currency, fmt } = useMoney();
   const saveTransaction = useGame((s) => s.saveTransaction);
   const deleteTransaction = useGame((s) => s.deleteTransaction);
+  const addPurchase = useGame((s) => s.addPurchase);
+  const deletePlan = useGame((s) => s.deletePlan);
   const { debts, goals } = usePlans();
   const from = tx ?? initial;
+  const cards = useMemo(() => activeCards(data), [data]);
 
   const [kind, setKind] = useState<TxKind>(from?.kind ?? 'expense');
   const amount = useAmount(from?.amount, currency);
@@ -187,8 +193,33 @@ export function TransactionForm({
   const [note, setNote] = useState(from?.note ?? '');
   const [link, setLink] = useState(linkOf(from as { debtId: string | null; goalId: string | null } | undefined));
 
+  // Where the money comes from: '' is the bank account, else a credit card.
+  const [cardId, setCardId] = useState(from?.cardId ?? '');
+  // How many monthly parts a new card purchase is paid in.
+  const [parts, setParts] = useState(1);
+  // The bill a card purchase goes on; null follows its date.
+  const [billPick, setBillPick] = useState<string | null>(tx?.bill ?? null);
+  // For money that leaves the bank to pay a card's bill: which bill.
+  const [pays, setPays] = useState(tx?.paysBill ?? '');
+
   const valid = amount.value !== null && amount.value > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
-  const beforeOpening = data.money !== null && valid && date < data.money.openingDate;
+  const card = kind === 'expense' && cardId ? data.cards[cardId] : undefined;
+  const onCard = card !== undefined;
+  const byDate = card && valid ? billFor(card, date) : null;
+  const bill = billPick ?? byDate;
+  const billChoices = card && bill && byDate ? [...new Set([addMonths(byDate, -1), byDate, addMonths(byDate, 1), addMonths(byDate, 2), bill])].sort() : [];
+  const beforeOpening = data.money !== null && valid && !onCard && date < data.money.openingDate;
+  // A payment of the card bill from the bank account can be tied to the bill it pays.
+  const canPay = !onCard && kind === 'expense' && category === 'card' && (cards.length > 0 || pays !== '');
+  const payChoices = useMemo(
+    () =>
+      cards.flatMap((c) =>
+        cardBills(data, c, today)
+          .filter((b) => b.left > 0 || billKey(c.id, b.month) === pays)
+          .map((b) => ({ key: billKey(c.id, b.month), label: `${c.name} · due ${formatShort(b.due)}${b.left > 0 ? ` · ${fmt(b.left)} to pay` : ''}` })),
+      ),
+    [cards, data, today, pays, fmt],
+  );
 
   const changeKind = (k: TxKind) => {
     setKind(k);
@@ -203,7 +234,24 @@ export function TransactionForm({
 
   const submit = () => {
     if (!valid) return;
-    saveTransaction({ date, kind, amount: amount.value!, category, note, ...unlink(link) }, tx?.id);
+    if (!tx && card) {
+      addPurchase({ cardId: card.id, date, amount: amount.value!, category, note, parts, bill: billPick ?? undefined });
+    } else {
+      saveTransaction(
+        {
+          date,
+          kind,
+          amount: amount.value!,
+          category,
+          note,
+          ...unlink(onCard ? '' : link),
+          cardId: card?.id ?? null,
+          bill: card ? (bill ?? undefined) : undefined,
+          paysBill: canPay && pays ? pays : null,
+        },
+        tx?.id,
+      );
+    }
     onClose();
   };
 
@@ -212,6 +260,62 @@ export function TransactionForm({
       <Form onSubmit={submit}>
         <Segmented<TxKind> label="Direction" value={kind} onChange={changeKind} options={KIND_OPTIONS} />
         <AmountInput amount={amount} currency={currency} label="Amount" autoFocus={!tx} large />
+
+        {kind === 'expense' && (cards.length > 0 || cardId !== '') && !pays && (
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-mute">Paid with</span>
+            <Segmented<string>
+              label="Paid with"
+              value={cardId}
+              onChange={(v) => {
+                setCardId(v);
+                setBillPick(null);
+              }}
+              options={[
+                { value: '', label: 'Bank account' },
+                ...cards.map((c) => ({ value: c.id, label: c.name })),
+                // A card that has since been removed still shows on what was bought with it.
+                ...(cardId && !cards.some((c) => c.id === cardId) ? [{ value: cardId, label: data.cards[cardId]?.name ?? 'Card' }] : []),
+              ]}
+            />
+            {onCard && (
+              <p className="mt-1.5 text-xs text-mute">
+                It counts as spending on its date. Your bank balance changes when you pay the card’s bill.
+              </p>
+            )}
+          </div>
+        )}
+
+        {onCard && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {!tx && (
+              <Field label="Instalments">
+                <select className={inputClass} value={parts} onChange={(e) => setParts(Number(e.target.value))}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 24].map((n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? 'Paid in one go' : `${n} × ${amount.value ? fmt(Math.floor(amount.value / n)) : '…'}`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            <Field label={parts > 1 ? 'First part goes on the bill' : 'Goes on the bill'}>
+              <select className={inputClass} value={bill ?? ''} disabled={!valid} onChange={(e) => setBillPick(e.target.value === byDate ? null : e.target.value)}>
+                {billChoices.map((m) => (
+                  <option key={m} value={m}>
+                    Due {formatShort(billDates(card!, m).due)}
+                    {m === byDate ? ' (by its date)' : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
+        {tx?.plan && (
+          <p className="-mt-2 text-xs text-mute">
+            Part {tx.plan.part} of {tx.plan.of} of a purchase in instalments. Changes here apply to this part only.
+          </p>
+        )}
 
         <div>
           <span className="mb-1.5 block text-xs font-medium text-mute">Category</span>
@@ -236,7 +340,25 @@ export function TransactionForm({
           </div>
         </div>
 
-        {kind === 'expense' && <LinkSelect value={link} onChange={changeLink} debts={debts} goals={goals} />}
+        {kind === 'expense' && !onCard && <LinkSelect value={link} onChange={changeLink} debts={debts} goals={goals} />}
+
+        {canPay && (
+          <Field label="This pays the bill of">
+            <select className={inputClass} value={pays} onChange={(e) => setPays(e.target.value)}>
+              <option value="">No bill in particular (counts as spending)</option>
+              {payChoices.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {canPay && pays && (
+          <p className="-mt-2 text-xs text-mute">
+            The money leaves your bank account. It isn’t counted as spending again: the purchases on the bill were.
+          </p>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -259,10 +381,12 @@ export function TransactionForm({
           onClose={onClose}
           valid={valid}
           saveLabel={tx ? 'Save changes' : 'Add'}
+          deleteLabel={tx?.plan ? `Delete all ${tx.plan.of} parts` : 'Delete'}
           onDelete={
             tx
               ? () => {
-                  deleteTransaction(tx.id);
+                  if (tx.plan) deletePlan(tx.plan.id);
+                  else deleteTransaction(tx.id);
                   onClose();
                 }
               : undefined

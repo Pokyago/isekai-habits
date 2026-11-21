@@ -307,7 +307,7 @@ describe('saving and merging plans', () => {
     delete old.habitDays;
     old.version = 5;
     const d = parseSave(JSON.stringify(old));
-    expect(d.version).toBe(9);
+    expect(d.version).toBe(10);
     expect(d.habitDays).toEqual({});
     expect(d.plan).toEqual({});
     expect(d.days).toEqual({});
