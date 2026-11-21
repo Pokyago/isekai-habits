@@ -3,7 +3,8 @@
 // A small native shell around the app: it shows the built app (the dist folder next to
 // this program) in its own window with its own icon and taskbar entry, and reads and
 // writes the save file for it, so syncing with iCloud Drive needs no file picker and
-// no browser permission. It holds no game logic. Build it with desktop/build.bat.
+// no browser permission. It also keeps a dated copy of the save each day, and shows the
+// evening reminder. It holds no game logic. Build it with desktop/build.bat.
 //
 // Same approach as the Hoshigatari Reader window, minus the local server: this app
 // has no server side, so the built files are handed to the web view directly.
@@ -14,8 +15,11 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -29,18 +33,27 @@ static class Program
     // "--profile <folder>" runs a separate copy for testing: its own settings, browser data
     // and save file, all inside that folder, so the real save is never touched.
     // "--exit-when-ready" closes the window as soon as the app is up, for timing the start-up.
+    // "--remind" is how Windows runs the evening reminder: no window, only a notification.
     [STAThread]
     static void Main(string[] args)
     {
         StartupLog.Mark("program started");
         string profile = null;
-        bool exitWhenReady = false;
+        bool exitWhenReady = false, remind = false, test = false;
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--profile" && i + 1 < args.Length) profile = Path.GetFullPath(args[++i]);
             else if (args[i] == "--exit-when-ready") exitWhenReady = true;
+            else if (args[i] == "--remind") remind = true;
+            else if (args[i] == "--test") test = true;
         }
         string scope = profile == null ? "" : "." + Hash(profile.ToLowerInvariant());
+        string stateDir = profile ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IsekaiHabits");
+        if (remind)
+        {
+            Reminder.Run(stateDir, profile, test);
+            return;
+        }
 
         // Only one window: starting the app again just brings the open one to the front.
         var mutex = new Mutex(true, "IsekaiHabits.SingleInstance" + scope, out bool first);
@@ -52,7 +65,7 @@ static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
-        var form = new MainForm(activate, profile, exitWhenReady);
+        var form = new MainForm(activate, stateDir, profile, scope, exitWhenReady);
         Application.Run(form);
         mutex.ReleaseMutex();
         mutex.Dispose();
@@ -75,6 +88,61 @@ static class Program
         uint h = 2166136261;
         foreach (char c in text) h = (h ^ c) * 16777619;
         return h.ToString("x8");
+    }
+}
+
+/// <summary>
+/// The evening reminder. Windows starts the program with "--remind" at the chosen time; it reads
+/// what the app last wrote down about the coming days (reminder.json) and, if habits are still
+/// open today, shows a notification. Clicking it opens the app.
+/// </summary>
+static class Reminder
+{
+    public const string BriefFile = "reminder.json";
+
+    public static void Run(string stateDir, string profile, bool test)
+    {
+        string title = "Isekai Habits";
+        string body = "Your habits are waiting.";
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(stateDir, BriefFile)));
+            var root = doc.RootElement;
+            JsonElement note;
+            if (root.GetProperty("days").TryGetProperty(DateTime.Now.ToString("yyyy-MM-dd"), out note))
+            {
+                // Everything done, or nothing to do: no reminder today.
+                if (note.GetProperty("left").GetInt32() <= 0 && !test) return;
+            }
+            else note = root.GetProperty("away");
+            title = note.GetProperty("title").GetString() ?? title;
+            body = note.GetProperty("body").GetString() ?? body;
+        }
+        catch { /* the app has not written anything down yet: the plain reminder will do */ }
+
+        ApplicationConfiguration.Initialize();
+        using var tray = new NotifyIcon { Text = "Isekai Habits" };
+        using (var icon = typeof(Reminder).Assembly.GetManifestResourceStream("icon.ico"))
+            tray.Icon = icon != null ? new Icon(icon, 32, 32) : SystemIcons.Application;
+        tray.Visible = true;
+        void Leave() { tray.Visible = false; Application.ExitThread(); }
+        tray.BalloonTipClicked += (_, _) =>
+        {
+            try
+            {
+                var app = new ProcessStartInfo(Environment.ProcessPath) { UseShellExecute = false };
+                if (profile != null) { app.ArgumentList.Add("--profile"); app.ArgumentList.Add(profile); }
+                Process.Start(app)?.Dispose();
+            }
+            catch { /* the user can open it by hand */ }
+            Leave();
+        };
+        tray.BalloonTipClosed += (_, _) => Leave();
+        using var giveUp = new System.Windows.Forms.Timer { Interval = 30000 };
+        giveUp.Tick += (_, _) => Leave();
+        giveUp.Start();
+        tray.ShowBalloonTip(15000, title, body, ToolTipIcon.None);
+        Application.Run();
     }
 }
 
@@ -114,6 +182,8 @@ sealed class MainForm : Form
     readonly Label status = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Text = "Starting Isekai Habits…", Font = new Font("Segoe UI", 11f) };
     static readonly string root = FindRoot();
     readonly string stateDir;
+    readonly string profile;
+    readonly string taskName;
     readonly bool testProfile;
     readonly bool exitWhenReady;
     bool closing;
@@ -124,10 +194,12 @@ sealed class MainForm : Form
     /// <summary>The app was started again while this window was closing.</summary>
     public bool ReopenAfterClose { get; private set; }
 
-    public MainForm(EventWaitHandle activate, string profile, bool exitWhenReady)
+    public MainForm(EventWaitHandle activate, string stateDir, string profile, string scope, bool exitWhenReady)
     {
-        stateDir = profile ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IsekaiHabits");
+        this.stateDir = stateDir;
+        this.profile = profile;
         testProfile = profile != null;
+        taskName = "Isekai Habits reminder" + (testProfile ? " (test" + scope + ")" : "");
         this.exitWhenReady = exitWhenReady;
         Text = "Isekai Habits";
         MinimumSize = new Size(420, 560);
@@ -289,6 +361,12 @@ sealed class MainForm : Form
                 if (exitWhenReady) BeginInvoke(Close);
                 return;
             }
+            if (cmd == "brief")
+            {
+                // What the reminder should say on each of the coming days, kept for when the app is closed.
+                if (text != null) WriteWhole(Path.Combine(stateDir, Reminder.BriefFile), text);
+                return;
+            }
             string path = SavePath();
 
             switch (cmd)
@@ -298,18 +376,70 @@ sealed class MainForm : Form
                     break;
 
                 case "read":
+                    BackupOnce(path);
                     Reply(new { id, ok = true, path, text = File.Exists(path) ? File.ReadAllText(path) : "" });
                     break;
 
                 case "write":
                     if (text == null) throw new InvalidOperationException("Nothing to save.");
-                    Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    // Write beside the file, then swap it in, so a crash can never leave half a save.
-                    string temp = path + ".tmp";
-                    File.WriteAllText(temp, text, new UTF8Encoding(false));
-                    File.Move(temp, path, true);
+                    BackupOnce(path);
+                    WriteWhole(path, text);
                     Reply(new { id, ok = true, path });
                     break;
+
+                case "backups":
+                {
+                    var list = new List<object>();
+                    if (Directory.Exists(BackupDir))
+                        foreach (string f in Directory.GetFiles(BackupDir, "*.json"))
+                            list.Add(new { name = Path.GetFileName(f), size = new FileInfo(f).Length });
+                    Reply(new { id, ok = true, path = BackupDir, text = JsonSerializer.Serialize(list) });
+                    break;
+                }
+
+                case "restore":
+                {
+                    string name = Path.GetFileName(text ?? "");
+                    string from = Path.Combine(BackupDir, name);
+                    if (name.Length == 0 || name != text || !name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || !File.Exists(from))
+                        throw new InvalidOperationException("That backup is no longer there.");
+                    string restored = File.ReadAllText(from);
+                    // The save as it is now is put aside first, so a restore can itself be undone.
+                    if (File.Exists(path))
+                    {
+                        File.Copy(path, Path.Combine(BackupDir, "before-restore-" + DateTime.Now.ToString("yyyy-MM-dd-HHmmss") + ".json"), true);
+                        Prune("before-restore-*.json", 5);
+                    }
+                    WriteWhole(path, restored);
+                    Reply(new { id, ok = true, path, text = restored });
+                    break;
+                }
+
+                case "openBackups":
+                    Directory.CreateDirectory(BackupDir);
+                    Process.Start(new ProcessStartInfo(BackupDir) { UseShellExecute = true })?.Dispose();
+                    Reply(new { id, ok = true, path = BackupDir });
+                    break;
+
+                case "reminder":
+                    Reply(new { id, ok = true, text = ReminderTime() });
+                    break;
+
+                case "setReminder":
+                    SetReminder(text ?? "");
+                    Reply(new { id, ok = true, text = ReminderTime() });
+                    break;
+
+                case "testReminder":
+                {
+                    var again = new ProcessStartInfo(Environment.ProcessPath) { UseShellExecute = false };
+                    again.ArgumentList.Add("--remind");
+                    again.ArgumentList.Add("--test");
+                    if (testProfile) { again.ArgumentList.Add("--profile"); again.ArgumentList.Add(profile); }
+                    Process.Start(again)?.Dispose();
+                    Reply(new { id, ok = true });
+                    break;
+                }
 
                 case "choose":
                     using (var dialog = new SaveFileDialog
@@ -356,6 +486,109 @@ sealed class MainForm : Form
         {
             Reply(new { id, ok = false, error = ex.Message });
         }
+    }
+
+    /// <summary>Writes beside the file, then swaps it in, so a crash can never leave half a file.</summary>
+    static void WriteWhole(string path, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        string temp = path + ".tmp";
+        File.WriteAllText(temp, text, new UTF8Encoding(false));
+        File.Move(temp, path, true);
+    }
+
+    // ---------- backups ----------
+    //
+    // Once a day, before the save is first read or changed, a copy of it is put in the Backups
+    // folder beside the window settings (not in iCloud Drive, so a bad sync can't reach it).
+    // The copy named for a day is the save as it was when that day began.
+
+    const int BackupsKept = 14;
+    string BackupDir => Path.Combine(stateDir, "Backups");
+    string backedUpOn;
+
+    void BackupOnce(string path)
+    {
+        string today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (backedUpOn == today) return;
+        try
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length == 0) return;
+            Directory.CreateDirectory(BackupDir);
+            string copy = Path.Combine(BackupDir, "isekai-habits-" + today + ".json");
+            if (!File.Exists(copy)) File.Copy(path, copy);
+            backedUpOn = today;
+            Prune("isekai-habits-????-??-??.json", BackupsKept);
+        }
+        catch { /* a backup that fails must never stop the save itself */ }
+    }
+
+    /// <summary>Keeps the newest files that match; their names sort by date.</summary>
+    void Prune(string pattern, int keep)
+    {
+        string[] files = Directory.GetFiles(BackupDir, pattern);
+        Array.Sort(files, StringComparer.Ordinal);
+        for (int i = 0; i < files.Length - keep; i++) File.Delete(files[i]);
+    }
+
+    // ---------- the evening reminder ----------
+    //
+    // A task in the Windows Task Scheduler starts this program with "--remind" every day at
+    // the chosen time (see Reminder). Nothing has to stay running for it.
+
+    string ReminderFile => Path.Combine(stateDir, "reminder-time.txt");
+
+    /// <summary>The time the reminder is set for, as HH:MM, or "" when it is off.</summary>
+    string ReminderTime()
+    {
+        try
+        {
+            string time = File.ReadAllText(ReminderFile).Trim();
+            if (Regex.IsMatch(time, "^([01][0-9]|2[0-3]):[0-5][0-9]$") && Schtasks(out _, "/Query", "/TN", taskName) == 0) return time;
+        }
+        catch { /* never set */ }
+        return "";
+    }
+
+    void SetReminder(string time)
+    {
+        if (time.Length == 0)
+        {
+            Schtasks(out _, "/Delete", "/TN", taskName, "/F");
+            File.Delete(ReminderFile);
+            return;
+        }
+        if (!Regex.IsMatch(time, "^([01][0-9]|2[0-3]):[0-5][0-9]$")) throw new InvalidOperationException("That is not a time.");
+
+        string arguments = "--remind" + (testProfile ? " --profile \"" + profile + "\"" : "");
+        string xml =
+            "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n" +
+            "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n" +
+            "  <RegistrationInfo><Description>Shows a reminder when habits are still open in Isekai Habits. Turn it off in the app's Settings.</Description></RegistrationInfo>\n" +
+            "  <Triggers><CalendarTrigger><StartBoundary>2026-01-01T" + time + ":00</StartBoundary><Enabled>true</Enabled><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers>\n" +
+            "  <Principals><Principal id=\"Author\"><UserId>" + WindowsIdentity.GetCurrent().User.Value + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\n" +
+            "  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><StartWhenAvailable>false</StartWhenAvailable><ExecutionTimeLimit>PT5M</ExecutionTimeLimit><Enabled>true</Enabled></Settings>\n" +
+            "  <Actions Context=\"Author\"><Exec><Command>" + SecurityElement.Escape(Environment.ProcessPath) + "</Command><Arguments>" + SecurityElement.Escape(arguments) + "</Arguments></Exec></Actions>\n" +
+            "</Task>\n";
+        string temp = Path.Combine(stateDir, "reminder-task.xml");
+        File.WriteAllText(temp, xml, Encoding.Unicode);
+        int code = Schtasks(out string said, "/Create", "/TN", taskName, "/XML", temp, "/F");
+        File.Delete(temp);
+        if (code != 0) throw new InvalidOperationException("Windows could not schedule the reminder. " + said);
+        File.WriteAllText(ReminderFile, time);
+    }
+
+    /// <summary>Runs the Windows task scheduler's own command-line tool and returns its exit code.</summary>
+    static int Schtasks(out string said, params string[] arguments)
+    {
+        var info = new ProcessStartInfo("schtasks.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (string a in arguments) info.ArgumentList.Add(a);
+        using var run = Process.Start(info);
+        string output = run.StandardOutput.ReadToEnd();
+        string error = run.StandardError.ReadToEnd();
+        run.WaitForExit(15000);
+        said = (error.Trim().Length > 0 ? error : output).Trim();
+        return run.HasExited ? run.ExitCode : -1;
     }
 
     void Reply(object answer)

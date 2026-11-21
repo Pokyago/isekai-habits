@@ -2,8 +2,10 @@ import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
 import { create } from 'zustand';
 import { mergeSaves, parseSave, sameSave, saveFingerprint, serializeSave } from '../data/merge';
 import { useGame } from '../data/store';
-import type { SaveData } from '../data/types';
-import { callHost, isDesktop } from './desktop';
+import type { DateStr, SaveData } from '../data/types';
+import { todayStr } from '../game/dates';
+import { reminderBrief } from '../game/reminder';
+import { callHost, hostBrief, isDesktop } from './desktop';
 
 /*
  * Sync works on a single save file, meant to live in iCloud Drive. There are three ways
@@ -175,9 +177,12 @@ export async function initSync(): Promise<void> {
       // The window program calls this just before it closes, so the last change reaches the file.
       (window as unknown as { isekaiFlush?: () => void }).isekaiFlush = () => {
         clearTimeout(timer);
+        clearTimeout(briefTimer);
+        postBrief();
         void runSync();
       };
       await runSync();
+      startBriefs();
     } else if (syncMode === 'auto') {
       handle = (await idbGet<SaveFileHandle>(HANDLE_KEY)) ?? null;
       if (!handle) return;
@@ -271,6 +276,98 @@ export async function retireSaveFile(): Promise<string | null> {
   const reply = await callHost('retire');
   lastSyncedPrint = null;
   return reply.text ?? null;
+}
+
+// ---------- desktop only: backups ----------
+
+/** A copy of the save that the window program has put aside. */
+export interface BackupInfo {
+  name: string;
+  size: number;
+  /** 'daily': the save as a day began. 'before-restore': the save as it was just before a backup was restored. */
+  kind: 'daily' | 'before-restore';
+  date: DateStr;
+  /** HH:MM, for a 'before-restore' copy. */
+  time: string | null;
+}
+
+/** Newest first. */
+export async function listBackups(): Promise<BackupInfo[]> {
+  const reply = await callHost('backups');
+  const files = JSON.parse(reply.text ?? '[]') as { name: string; size: number }[];
+  const list: BackupInfo[] = [];
+  for (const f of files) {
+    const daily = /^isekai-habits-(\d{4}-\d{2}-\d{2})\.json$/.exec(f.name);
+    const before = /^before-restore-(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})\d{2}\.json$/.exec(f.name);
+    if (daily) list.push({ ...f, kind: 'daily', date: daily[1], time: null });
+    else if (before) list.push({ ...f, kind: 'before-restore', date: before[1], time: `${before[2]}:${before[3]}` });
+  }
+  const key = (b: BackupInfo) => `${b.date} ${b.time ?? '00:00'} ${b.name}`;
+  return list.sort((a, b) => (key(a) < key(b) ? 1 : -1));
+}
+
+/**
+ * Puts the save back to one of the copies. Unlike every other read this is not a merge:
+ * the copy replaces what is on this device and in the save file.
+ */
+export async function restoreBackup(name: string): Promise<void> {
+  clearTimeout(timer);
+  queued = false;
+  while (running) await sleep(40);
+  running = true;
+  try {
+    const reply = await callHost('restore', name);
+    const data = parseSave(reply.text ?? '');
+    lastSyncedPrint = saveFingerprint(data);
+    useGame.getState().replaceData(data);
+    useSync.setState({ status: 'synced', lastSyncedAt: Date.now(), error: null });
+  } finally {
+    running = false;
+  }
+}
+
+export async function openBackups(): Promise<void> {
+  await callHost('openBackups');
+}
+
+// ---------- desktop only: the evening reminder ----------
+
+/** The time the reminder is set for, as HH:MM, or '' when it is off. */
+export async function getReminder(): Promise<string> {
+  return (await callHost('reminder')).text ?? '';
+}
+
+/** Sets the reminder to a time (HH:MM), or turns it off with ''. Returns what it is now. */
+export async function setReminder(time: string): Promise<string> {
+  postBrief();
+  return (await callHost('setReminder', time)).text ?? '';
+}
+
+export async function testReminder(): Promise<void> {
+  postBrief();
+  await callHost('testReminder');
+}
+
+let lastBrief = '';
+let briefTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Writes down, for the window program, what the reminder should say on the coming days. */
+function postBrief(): void {
+  const text = JSON.stringify(reminderBrief(useGame.getState().data, todayStr()));
+  if (text === lastBrief) return;
+  lastBrief = text;
+  hostBrief(text);
+}
+
+function startBriefs(): void {
+  postBrief();
+  useGame.subscribe((state, prev) => {
+    if (state.data === prev.data) return;
+    clearTimeout(briefTimer);
+    briefTimer = setTimeout(postBrief, 1500);
+  });
+  // The notes are dated: write new ones when the day changes with the app left open.
+  setInterval(postBrief, 10 * 60_000);
 }
 
 function markManualSynced(data: SaveData): void {

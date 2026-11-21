@@ -19,7 +19,19 @@ export interface HostReply {
   error?: string;
 }
 
-export type HostCommand = 'info' | 'read' | 'write' | 'choose' | 'reveal' | 'retire';
+export type HostCommand =
+  | 'info'
+  | 'read'
+  | 'write'
+  | 'choose'
+  | 'reveal'
+  | 'retire'
+  | 'backups'
+  | 'restore'
+  | 'openBackups'
+  | 'reminder'
+  | 'setReminder'
+  | 'testReminder';
 
 const host: WebViewHost | undefined =
   typeof window === 'undefined'
@@ -44,6 +56,11 @@ host?.addEventListener('message', (event) => {
 /** Tells the window program that the app itself is on screen, which ends its start-up. */
 export function hostReady(): void {
   host?.postMessage({ id: 0, cmd: 'ready' });
+}
+
+/** Hands the window program what the evening reminder should say on the coming days. */
+export function hostBrief(text: string): void {
+  host?.postMessage({ id: 0, cmd: 'brief', text });
 }
 
 export function callHost(cmd: HostCommand, text?: string): Promise<HostReply> {

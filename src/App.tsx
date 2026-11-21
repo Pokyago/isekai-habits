@@ -30,6 +30,7 @@ import { Hero } from './screens/Hero';
 import { Money } from './screens/money/Money';
 import { Onboarding } from './screens/Onboarding';
 import { Plan } from './screens/Plan';
+import { Review } from './screens/Review';
 import { Settings } from './screens/Settings';
 import { Shop } from './screens/Shop';
 import { Today } from './screens/Today';
@@ -229,23 +230,24 @@ function SideNav({ tab, onSelect }: { tab: Tab; onSelect(tab: Tab): void }) {
   );
 }
 
-/** The Hero tab: the character sheet, and the chronicle of what has been done. */
+/** The Hero tab: the character sheet, the week looked back on, and the chronicle of what has been done. */
 function HeroPage() {
-  const [view, setView] = useState<'status' | 'chronicle'>('status');
+  const [view, setView] = useState<'status' | 'week' | 'chronicle'>('status');
   return (
     <div className="space-y-4">
       <div className="max-w-md">
-        <Segmented<'status' | 'chronicle'>
+        <Segmented<'status' | 'week' | 'chronicle'>
           label="Hero section"
           value={view}
           onChange={setView}
           options={[
             { value: 'status', label: 'Status' },
+            { value: 'week', label: 'Week in review' },
             { value: 'chronicle', label: 'Chronicle' },
           ]}
         />
       </div>
-      {view === 'status' ? <Hero /> : <Chronicle />}
+      {view === 'status' ? <Hero /> : view === 'week' ? <Review /> : <Chronicle />}
     </div>
   );
 }

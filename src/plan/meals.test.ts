@@ -147,7 +147,7 @@ describe('saving and merging meals', () => {
     delete old.meals;
     old.version = 7;
     const d = parseSave(JSON.stringify(old));
-    expect(d.version).toBe(8);
+    expect(d.version).toBe(9);
     expect(d.meals).toEqual({});
   });
 

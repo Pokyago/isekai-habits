@@ -1,6 +1,7 @@
 import { PLAN_AHEAD_REWARD, REWARDED_GOALS } from '../plan/plan';
 import { Download } from 'lucide-react';
 import { useState } from 'react';
+import { BackupList, ReminderPanel } from '../components/DesktopPanels';
 import { SyncPanel } from '../components/SyncPanel';
 import { Button, Modal, Panel, inputClass } from '../components/ui';
 import { useFx } from '../data/fx';
@@ -28,10 +29,22 @@ export function Settings() {
         <SyncPanel />
       </Panel>
 
-      <Panel title="Backup">
+      {syncMode === 'desktop' && (
+        <Panel title="Evening reminder">
+          <ReminderPanel />
+        </Panel>
+      )}
+
+      <Panel title={syncMode === 'desktop' ? 'Backups' : 'Backup'}>
+        {syncMode === 'desktop' && (
+          <div className="mb-4 border-b border-edge/60 pb-4">
+            <BackupList />
+          </div>
+        )}
         <p className="mb-3 text-sm text-mute">
-          Download a dated copy of your save for safekeeping.
-          {syncMode !== 'desktop' && ' To restore one, load it as a save file; it is merged with what you have.'}
+          {syncMode === 'desktop'
+            ? 'You can also download a copy of your save as it is right now, to keep anywhere you like.'
+            : 'Download a dated copy of your save for safekeeping. To restore one, load it as a save file; it is merged with what you have.'}
         </p>
         <Button onClick={() => downloadBackup(today)}>
           <Download size={16} /> Download backup
@@ -108,6 +121,10 @@ export function Settings() {
             Your heroine: her mood is the share of habits you did over the last 7 days, the recent days counting most.
             A missed day costs her about one mood and a good day wins one back; today only counts in her favour until
             it is over. She changes nothing about XP, gold or streaks. Click her to see the days she remembers.
+          </li>
+          <li>
+            Her wardrobe, in the Shop: hair, hair pieces, capes and skirts cost gold once and then stay yours. They
+            only change how she looks.
           </li>
         </ul>
       </Panel>

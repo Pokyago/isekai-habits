@@ -2,7 +2,7 @@ import type { SaveData } from './types';
 
 export function emptySave(): SaveData {
   return {
-    version: 8,
+    version: 9,
     hero: null,
     habits: {},
     completions: {},
@@ -23,6 +23,7 @@ export function emptySave(): SaveData {
     days: {},
     habitDays: {},
     meals: {},
+    wardrobe: null,
   };
 }
 
@@ -60,7 +61,7 @@ function mergeMap<T extends { updatedAt: number }>(a: Record<string, T>, b: Reco
  */
 export function mergeSaves(a: SaveData, b: SaveData): SaveData {
   return {
-    version: 8,
+    version: 9,
     hero: a.hero && b.hero ? newer(a.hero, b.hero) : (a.hero ?? b.hero),
     habits: mergeMap(a.habits, b.habits),
     completions: mergeMap(a.completions, b.completions),
@@ -82,6 +83,7 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     days: mergeMap(a.days, b.days),
     habitDays: mergeMap(a.habitDays, b.habitDays),
     meals: mergeMap(a.meals, b.meals),
+    wardrobe: a.wardrobe && b.wardrobe ? newer(a.wardrobe, b.wardrobe) : (a.wardrobe ?? b.wardrobe),
   };
 }
 
@@ -100,13 +102,13 @@ export function parseSave(text: string): SaveData {
     throw new Error('This file is not a valid Isekai Habits save.');
   }
   // A newer app may store things this one doesn't know about; writing the file back would lose them.
-  if (raw.version > 8) {
+  if (raw.version > 9) {
     throw new Error('This save was made by a newer version of Isekai Habits. Update the app on this device first.');
   }
-  // Older saves simply lack the newer collections: version 1 has no money records, version 2 no subscriptions, version 3 no health check-ins, version 4 no sleep log, version 5 no day plans, version 6 no habit choices, version 7 no meals.
+  // Older saves simply lack the newer collections: version 1 has no money records, version 2 no subscriptions, version 3 no health check-ins, version 4 no sleep log, version 5 no day plans, version 6 no habit choices, version 7 no meals, version 8 no wardrobe.
   const map = (key: string) => (isRecord(raw[key]) ? raw[key] : {});
   return {
-    version: 8,
+    version: 9,
     hero: isRecord(raw.hero) ? (raw.hero as unknown as SaveData['hero']) : null,
     habits: map('habits') as SaveData['habits'],
     completions: map('completions') as SaveData['completions'],
@@ -127,6 +129,7 @@ export function parseSave(text: string): SaveData {
     days: map('days') as SaveData['days'],
     habitDays: map('habitDays') as SaveData['habitDays'],
     meals: map('meals') as SaveData['meals'],
+    wardrobe: isRecord(raw.wardrobe) && isRecord(raw.wardrobe.worn) ? (raw.wardrobe as unknown as SaveData['wardrobe']) : null,
   };
 }
 

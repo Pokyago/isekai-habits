@@ -1,9 +1,7 @@
 import { useId } from 'react';
 import type { Mood } from '../game/companion';
+import { STARTER_OUTFIT, type ClipKind, type Outfit } from '../game/wardrobe';
 
-const HAIR = '#eceef6';
-const HAIR_SHADE = '#c3c8da';
-const HAIR_DARK = '#8f96ae';
 const SKIN = '#ffe6d6';
 const SKIN_SHADE = '#f1c2ab';
 const INK = '#33213a';
@@ -13,9 +11,6 @@ const WHITE_SHADE = '#dde1ee';
 const VEST = '#383b4a';
 const RED = '#c9303f';
 const RED_SHADE = '#9c2232';
-const BLUE = '#2a428f';
-const GREEN = '#2e8b78';
-const GREEN_SHADE = '#216b5c';
 const LEATHER = '#5e4336';
 const LIP = '#b23a5c';
 const GOLD = '#f3c452';
@@ -30,13 +25,15 @@ const EYE_Y = 64;
 /**
  * The heroine, drawn in code. Her face and pose follow her mood; the movement is
  * in index.css (the hv- rules), keyed by data-pose. `cheering` is the short jump
- * for joy when something has just been achieved, whatever her mood.
+ * for joy when something has just been achieved, whatever her mood. Her hair, hair
+ * piece, cape and skirt come from her outfit (game/wardrobe.ts).
  */
 export function Heroine({
   mood,
   cheering = false,
   accent,
   tone,
+  outfit = STARTER_OUTFIT,
   portrait = false,
   className = '',
 }: {
@@ -46,6 +43,8 @@ export function Heroine({
   accent: string;
   /** The colour of the light around her: her mood. */
   tone: string;
+  /** What she has on. Without it, the clothes she starts with. */
+  outfit?: Outfit;
   /** Only her face, for a small round picture. */
   portrait?: boolean;
   className?: string;
@@ -53,10 +52,15 @@ export function Heroine({
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const look: Mood = cheering ? 'radiant' : mood;
   const pose = cheering ? 'cheer' : mood;
+  const [hair, hairBack, hairDark] = outfit.hair.colors;
+  const classCape = outfit.cape.colors[0] === 'class';
+  const capeMain = classCape ? accent : outfit.cape.colors[0];
+  const capeFold = classCape ? `color-mix(in srgb, ${accent} 68%, #0b0e22)` : outfit.cape.colors[1];
+  const [skirt, skirtFold] = outfit.skirt.colors;
 
   return (
     <svg
-      viewBox={portrait ? '24 20 72 72' : '0 -14 120 170'}
+      viewBox={portrait ? '22 12 76 76' : '0 -14 120 170'}
       className={`hv ${className}`}
       data-pose={pose}
       data-mood={mood}
@@ -87,20 +91,20 @@ export function Heroine({
         <g className="hv-head" style={{ transformOrigin: '60px 86px' }}>
           <path
             d="M27 56 C22 14 98 14 93 56 C98 80 101 108 98 132 C94 125 91 121 88 119 C87 123 85 126 82 128 L38 128 C35 126 33 123 32 119 C29 121 26 125 22 132 C19 108 22 80 27 56 Z"
-            fill={HAIR_SHADE}
+            style={{ fill: hairBack }}
           />
         </g>
 
         {/* The cape hangs from one shoulder: red, lined in blue, edged in gold, and cut to two points. */}
-        <path d="M70 97 C77 108 80 122 81 135 L87 141 C86 124 81 108 72 96 Z" fill={BLUE} />
+        <path d="M70 97 C77 108 80 122 81 135 L87 141 C86 124 81 108 72 96 Z" style={{ fill: outfit.cape.colors[2] }} />
         <path
           d="M66 90 L80 91 C91 104 98 120 101 137 L92 131 L87 141 C86 124 81 108 72 96 Z"
-          fill={RED}
+          style={{ fill: capeMain }}
           stroke={GOLD}
           strokeWidth="1.5"
           strokeLinejoin="round"
         />
-        <path d="M80 93 C88 106 93 119 95.5 131" fill="none" stroke={RED_SHADE} strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M80 93 C88 106 93 119 95.5 131" fill="none" style={{ stroke: capeFold }} strokeWidth="1.2" strokeLinecap="round" />
 
         {/* White stockings and tall boots with gold cuffs. */}
         <rect x="51" y="122" width="6.5" height="20" rx="3" fill={WHITE} />
@@ -122,8 +126,8 @@ export function Heroine({
         </g>
 
         {/* Pleated green skirt with a gold hem, under a leather belt. */}
-        <path d="M46 109 L74 109 C77 115 80 121 82 126 Q60 133.5 38 126 C40 121 43 115 46 109 Z" fill={GREEN} />
-        <path d="M52.5 111 L48.5 129 M60 111 V131 M67.5 111 L71.5 129" stroke={GREEN_SHADE} strokeWidth="1.1" strokeLinecap="round" />
+        <path d="M46 109 L74 109 C77 115 80 121 82 126 Q60 133.5 38 126 C40 121 43 115 46 109 Z" style={{ fill: skirt }} />
+        <path d="M52.5 111 L48.5 129 M60 111 V131 M67.5 111 L71.5 129" style={{ stroke: skirtFold }} strokeWidth="1.1" strokeLinecap="round" />
         <path d="M39 123.6 Q60 130.8 81 123.6" fill="none" stroke={GOLD} strokeWidth="1.6" />
         <path d="M46.3 107 H73.7 L74.2 110.8 H45.8 Z" fill="#7a5236" />
         <rect x="57.6" y="106.6" width="4.8" height="4.6" rx="0.8" fill="none" stroke={GOLD} strokeWidth="1.2" />
@@ -159,23 +163,20 @@ export function Heroine({
           {/* Fringe with a strand between the eyes, long locks beside her face, and the one strand that never lies flat. */}
           <path
             d="M32.5 60 C29 18 91 18 87.5 60 C86.5 56 84 53 81 51 C79 55 75 57.5 70 58 C70 53 68 49 65 46 C64 52 62 58 60 62 C58 56 55 50 51 46 C50 51 47 56 43 58 C43.5 55 42 52 39.5 51 C36.5 53 34 56 32.5 60 Z"
-            fill={HAIR}
+            style={{ fill: hair }}
           />
-          <path d="M32.5 54 C29.5 70 30 90 34.5 104 C38 90 39.5 70 38.5 54 Z" fill={HAIR} />
-          <path d="M87.5 54 C90.5 70 90 90 85.5 104 C82 90 80.5 70 81.5 54 Z" fill={HAIR} />
+          <path d="M32.5 54 C29.5 70 30 90 34.5 104 C38 90 39.5 70 38.5 54 Z" style={{ fill: hair }} />
+          <path d="M87.5 54 C90.5 70 90 90 85.5 104 C82 90 80.5 70 81.5 54 Z" style={{ fill: hair }} />
           <path d="M42 37.5 Q52 29.5 66 29.5" fill="none" stroke="#fff" strokeOpacity="0.75" strokeWidth="2.4" strokeLinecap="round" />
-          <path className="hv-ahoge" d="M58 28 C54 16 64 10 70 16 C65 16 62 20 63 28 Z" fill={HAIR} style={{ transformOrigin: '60.5px 28px' }} />
+          <path className="hv-ahoge" d="M58 28 C54 16 64 10 70 16 C65 16 62 20 63 28 Z" style={{ fill: hair, transformOrigin: '60.5px 28px' }} />
 
-          {/* A gold leaf clip tied with a dark ribbon. */}
-          <path d="M84.5 45 L90 42.5 L89 49 Z M84.5 45 L86.5 52.5 L81.5 50.5 Z" fill="#2d2f3a" />
-          <path d="M76 45.5 Q78 36.5 86 36.5 Q84.5 45 76 45.5 Z" fill={GOLD} />
-          <path d="M77.5 44.5 L84.5 38" fill="none" stroke="#c9972e" strokeWidth="0.8" strokeLinecap="round" />
+          <HairPiece kind={outfit.clip.clip ?? 'leaf'} hair={hair} />
 
           {/* Worried brows show through the fringe. */}
           {(look === 'tired' || look === 'exhausted') && (
             <path
               d={look === 'tired' ? 'M43 56 L52 54 M77 56 L68 54' : 'M43 57 L52 53 M77 57 L68 53'}
-              stroke={HAIR_DARK}
+              style={{ stroke: hairDark }}
               strokeWidth="1.7"
               strokeLinecap="round"
             />
@@ -186,6 +187,60 @@ export function Heroine({
       {!portrait && <Around pose={pose} />}
     </svg>
   );
+}
+
+/** What she wears in her hair. */
+function HairPiece({ kind, hair }: { kind: ClipKind; hair: string }) {
+  switch (kind) {
+    case 'star':
+      return (
+        <g transform="translate(81.5 42.5)">
+          <path d={SPARKLE} fill={GOLD} transform="scale(1.3)" />
+          <circle r="1.3" fill="#fff6cf" />
+        </g>
+      );
+    case 'blossom':
+      return (
+        <g transform="translate(81.5 43)">
+          {[0, 72, 144, 216, 288].map((turn) => (
+            <circle key={turn} cx="0" cy="-3.5" r="2.7" fill="#ff9fc0" transform={`rotate(${turn})`} />
+          ))}
+          <circle r="1.9" fill={GOLD} />
+        </g>
+      );
+    case 'ribbon':
+      return (
+        <g>
+          <path d="M82 43.5 L79.2 52 L82.3 50.2 Z M82 43.5 L85.6 52 L83 50.2 Z" fill={RED_SHADE} />
+          <path d="M82 43.5 L75 39.6 L76 47.6 Z M82 43.5 L89 39.6 L88 47.6 Z" fill={RED} />
+          <circle cx="82" cy="43.5" r="1.8" fill={RED_SHADE} />
+        </g>
+      );
+    case 'ears':
+      return (
+        <g>
+          <path d="M37.5 37 L39.5 15.5 L55 28.5 Z M82.5 37 L80.5 15.5 L65 28.5 Z" style={{ fill: hair }} />
+          <path d="M41.5 31.5 L42.5 21 L50.5 28 Z M78.5 31.5 L77.5 21 L69.5 28 Z" fill="#ffb3c7" />
+        </g>
+      );
+    case 'tiara':
+      return (
+        <g>
+          <path d="M51.5 31 L54.5 23.5 L57.5 29.5 Z M57 29.6 L60 20 L63 29.6 Z M62.5 29.5 L65.5 23.5 L68.5 31 Z" fill={GOLD} />
+          <path d="M43.5 33.5 Q60 26 76.5 33.5" fill="none" stroke={GOLD} strokeWidth="2.4" strokeLinecap="round" />
+          <circle cx="60" cy="27.4" r="1.6" fill="#e23f55" />
+        </g>
+      );
+    default:
+      // A gold leaf tied with a dark ribbon.
+      return (
+        <g>
+          <path d="M84.5 45 L90 42.5 L89 49 Z M84.5 45 L86.5 52.5 L81.5 50.5 Z" fill="#2d2f3a" />
+          <path d="M76 45.5 Q78 36.5 86 36.5 Q84.5 45 76 45.5 Z" fill={GOLD} />
+          <path d="M77.5 44.5 L84.5 38" fill="none" stroke="#c9972e" strokeWidth="0.8" strokeLinecap="round" />
+        </g>
+      );
+  }
 }
 
 function Face({ look, uid }: { look: Mood; uid: string }) {

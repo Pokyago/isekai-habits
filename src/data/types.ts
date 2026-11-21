@@ -88,10 +88,19 @@ export interface Reward {
 
 export interface Purchase {
   id: string;
-  kind: 'reward' | 'shield';
+  /** 'item' is a piece of the heroine's wardrobe; its id is `item|${item}`. */
+  kind: 'reward' | 'shield' | 'item';
+  /** For an 'item': which piece (see game/wardrobe.ts). */
+  item?: string;
   name: string;
   cost: number;
   date: DateStr;
+  updatedAt: number;
+}
+
+/** What the heroine has on: for each part of her outfit, the piece worn. */
+export interface Wardrobe {
+  worn: Record<string, string>;
   updatedAt: number;
 }
 
@@ -309,7 +318,7 @@ export interface Debt {
  * two copies is safe.
  */
 export interface SaveData {
-  version: 8;
+  version: 9;
   hero: Hero | null;
   habits: Record<string, Habit>;
   completions: Record<string, Completion>;
@@ -335,4 +344,6 @@ export interface SaveData {
   habitDays: Record<string, HabitDay>;
   /** What is planned to eat, one record for each meal of a day. */
   meals: Record<string, Meal>;
+  /** What the heroine is wearing. Null until something is changed. */
+  wardrobe: Wardrobe | null;
 }

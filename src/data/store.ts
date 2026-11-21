@@ -1,6 +1,7 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { create } from 'zustand';
 import { todayStr } from '../game/dates';
+import * as wardrobe from '../game/wardrobe';
 import { derive } from '../game/derive';
 import type { DayChoice } from '../game/schedule';
 import { STATS, STAT_ORDER } from './meta';
@@ -41,6 +42,9 @@ interface GameState {
   deleteReward(id: string): void;
   buyReward(id: string): void;
   buyShield(): void;
+  /** Buys a piece of the heroine's wardrobe and puts it on. */
+  buyItem(itemId: string): void;
+  wearItem(itemId: string): void;
   resetAll(): void;
 
   // Money
@@ -189,6 +193,17 @@ export const useGame = create<GameState>((set, get) => {
       if (!next) return useFx.getState().toast('Not enough gold', 'warn');
       set({ data: next });
       useFx.getState().toast('Streak shield acquired', 'reward');
+    },
+    buyItem(itemId) {
+      const d = get().data;
+      const next = wardrobe.buyItem(d, itemId, derive(d, todayStr()).gold, todayStr(), Date.now());
+      if (!next) return useFx.getState().toast('Not enough gold', 'warn');
+      if (next === d) return;
+      set({ data: next });
+      useFx.getState().toast(`A new look: ${wardrobe.itemById(itemId)?.name ?? ''}`, 'reward');
+    },
+    wearItem(itemId) {
+      apply((d) => wardrobe.wearItem(d, itemId, Date.now()));
     },
     resetAll() {
       set({ data: emptySave() });

@@ -4,6 +4,7 @@ import type { DateStr } from './data/types';
 import { dailyQuests, type DailyQuest } from './game/dailyQuests';
 import { todayStr } from './game/dates';
 import { derive, type Derived } from './game/derive';
+import { xpBetween } from './game/review';
 import { dueHabits, isDone } from './game/schedule';
 
 /** Today's date, kept current if the app is left open past midnight. */
@@ -43,17 +44,11 @@ export function useDayProgress(date?: DateStr): DayProgress {
   const day = date ?? today;
   return useMemo(() => {
     const scheduled = dueHabits(data, day).filter((h) => h.schedule.kind === 'weekdays');
-    let xp = 0;
-    for (const c of Object.values(data.completions)) if (c.date === day && c.done) xp += c.xp;
-    for (const c of Object.values(data.claims)) if (c.date === day && c.claimed) xp += c.xp;
-    for (const q of Object.values(data.quests)) if (q.doneDate === day) xp += q.xp;
-    for (const p of Object.values(data.plan)) if (p.date === day && p.done) xp += p.xp;
-    for (const m of Object.values(data.meals)) if (m.date === day && m.done) xp += m.xp;
     return {
       total: scheduled.length,
       done: scheduled.filter((h) => isDone(data, h.id, day)).length,
       quests: dailyQuests(data, day),
-      xp,
+      xp: xpBetween(data, day, day),
     };
   }, [data, day]);
 }

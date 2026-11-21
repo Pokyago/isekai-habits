@@ -5,11 +5,12 @@ import { CLASSES, WEEKDAY_LABELS, statColor } from '../data/meta';
 import { useGame } from '../data/store';
 import { CARE_DAYS, MOODS, MOOD_ORDER, companion, companionLine, moodFor, type CareDay, type Companion, type Mood } from '../game/companion';
 import { weekday } from '../game/dates';
+import { outfitOf, type Outfit } from '../game/wardrobe';
 import { useToday } from '../hooks';
 import { Heroine } from './Heroine';
 import { Button, Modal } from './ui';
 
-const MOOD_COLOR: Record<Mood, string> = {
+export const MOOD_COLOR: Record<Mood, string> = {
   radiant: 'var(--color-gold)',
   cheerful: 'var(--stat-vit)',
   steady: 'var(--color-glow)',
@@ -22,6 +23,8 @@ interface Shown extends Companion {
   color: string;
   /** The colour of the gem on her bow: the hero's class. */
   accent: string;
+  /** What she has on. */
+  outfit: Outfit;
   /** True for a moment after XP was earned: she jumps for joy. */
   cheering: boolean;
   label: string;
@@ -48,12 +51,14 @@ function useCompanion(xp: number): Shown {
   }, [xp]);
 
   const line = companionLine(c);
+  const outfit = useMemo(() => outfitOf(data), [data]);
   const stat = data.hero ? CLASSES[data.hero.heroClass].stat : 'spi';
   return {
     ...c,
     line,
     color: MOOD_COLOR[c.mood],
     accent: statColor(stat),
+    outfit,
     cheering,
     label: `Your heroine is ${MOODS[c.mood].name.toLowerCase()}: morale ${c.morale} out of 100. She says: ${line} Open to see why.`,
   };
@@ -92,7 +97,7 @@ export function CompanionWindow({ xp, onToday }: { xp: number; onToday(): void }
         style={frame(c.color)}
       >
         <span className="block h-48 min-h-12 w-full shrink">
-          <Heroine mood={c.mood} cheering={c.cheering} accent={c.accent} tone={c.color} className="size-full" />
+          <Heroine mood={c.mood} cheering={c.cheering} accent={c.accent} tone={c.color} outfit={c.outfit} className="size-full" />
         </span>
         <span className="block shrink-0 border-t border-edge/60 bg-panel/60 px-3 pt-2 pb-2.5">
           <span className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -127,7 +132,7 @@ export function CompanionBadge({ xp, onToday }: { xp: number; onToday(): void })
         className={`size-9 shrink-0 overflow-hidden sm:size-11 rounded-full border-2 transition-[border-color] duration-700 lg:hidden ${c.cheering ? 'animate-goal' : ''}`}
         style={{ borderColor: c.color, background: `color-mix(in srgb, ${c.color} 14%, var(--color-void))` }}
       >
-        <Heroine mood={c.mood} cheering={c.cheering} accent={c.accent} tone={c.color} portrait className="size-full" />
+        <Heroine mood={c.mood} cheering={c.cheering} accent={c.accent} tone={c.color} outfit={c.outfit} portrait className="size-full" />
       </button>
       {open && <CompanionDetails c={c} onClose={() => setOpen(false)} onToday={onToday} />}
     </>
@@ -142,7 +147,7 @@ function CompanionDetails({ c, onClose, onToday }: { c: Shown; onClose(): void; 
     <Modal title="Your heroine" onClose={onClose}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="mx-auto h-56 w-44 shrink-0 overflow-hidden rounded-xl border" style={frame(c.color)}>
-          <Heroine mood={c.mood} cheering={c.cheering} accent={c.accent} tone={c.color} className="size-full" />
+          <Heroine mood={c.mood} cheering={c.cheering} accent={c.accent} tone={c.color} outfit={c.outfit} className="size-full" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -203,13 +208,13 @@ function CompanionDetails({ c, onClose, onToday }: { c: Shown; onClose(): void; 
   );
 }
 
-function DayColumn({ day, today = false }: { day: CareDay; today?: boolean }) {
+export function DayColumn({ day, today = false, dim = false }: { day: CareDay; today?: boolean; dim?: boolean }) {
   const share = day.due > 0 ? day.done / day.due : 0;
   const color = MOOD_COLOR[moodFor(share * 100)];
   const name = WEEKDAY_LABELS[weekday(day.date)];
   return (
     <li
-      className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg border py-2 ${today ? 'border-glow/60 bg-glow/5' : 'border-edge/50'}`}
+      className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg border py-2 ${today ? 'border-glow/60 bg-glow/5' : 'border-edge/50'} ${dim ? 'opacity-40' : ''}`}
       aria-label={`${today ? 'Today' : name}: ${day.due === 0 ? 'nothing to do' : `${day.done} of ${day.due} habits done`}`}
     >
       <span className="relative block h-12 w-2.5 overflow-hidden rounded-full bg-void/80 ring-1 ring-edge/60" aria-hidden>

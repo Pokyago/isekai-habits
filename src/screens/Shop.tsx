@@ -6,6 +6,7 @@ import { useGame } from '../data/store';
 import type { Reward } from '../data/types';
 import { useDerived } from '../hooks';
 import { formatShort } from '../game/dates';
+import { WardrobePanel } from './ShopWardrobe';
 
 export function Shop() {
   const rewards = useGame((s) => s.data.rewards);
@@ -31,6 +32,8 @@ export function Shop() {
           <Coins size={18} /> {d.gold.toLocaleString()}
         </span>
       </div>
+
+      <WardrobePanel />
 
       <Panel title="Adventurer’s supplies">
         <div className="flex items-center gap-3">
