@@ -275,6 +275,11 @@ export interface Subscription {
   /** A date it is charged on. Other charges fall a whole number of months or years from it. */
   anchor: DateStr;
   /**
+   * Paid at some point in each month (or year) rather than on a set day. It counts in the
+   * totals but has no due date, so `anchor` is not used and no entry is ever added for it.
+   */
+  floating?: true;
+  /**
    * 'bank': each charge is added to the entries automatically.
    * 'card': tracked only, since the charge is already inside the credit card bill.
    * 'manual': paid from the bank account but tracked only; the entry is recorded by hand or comes in with a statement.

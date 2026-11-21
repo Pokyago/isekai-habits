@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
+import { DateField } from '../../components/DateField';
 import { Button, Field, Modal, Segmented, inputClass } from '../../components/ui';
 import { useGame } from '../../data/store';
 import type { Debt, Goal, Recurring, Transaction, TxKind } from '../../data/types';
@@ -238,9 +239,10 @@ export function TransactionForm({
         {kind === 'expense' && <LinkSelect value={link} onChange={changeLink} debts={debts} goals={goals} />}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Date">
-            <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-mute">Date</span>
+            <DateField value={date} onChange={setDate} label="Date" />
+          </div>
           <Field label="Note (optional)">
             <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="e.g. Lunch with Ana" />
           </Field>
@@ -375,9 +377,10 @@ export function DebtForm({ debt, onClose }: { debt?: Debt; onClose(): void }) {
           <AmountInput amount={owed} currency={currency} label="Amount owed" />
           {debt && <p className="mt-1.5 text-xs text-mute">Raise this if interest is added.</p>}
         </div>
-        <Field label="Clear it by (optional)">
-          <input type="date" className={inputClass} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-        </Field>
+        <div>
+          <span className="mb-1.5 block text-xs font-medium text-mute">Clear it by (optional)</span>
+          <DateField value={targetDate} onChange={setTargetDate} label="Clear it by" placeholder="No date" clearable />
+        </div>
         <FormButtons
           onClose={onClose}
           valid={valid}
@@ -430,9 +433,10 @@ export function GoalForm({ goal, onClose }: { goal?: Goal; onClose(): void }) {
             added on top.
           </p>
         </div>
-        <Field label="Reach it by (optional)">
-          <input type="date" className={inputClass} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-        </Field>
+        <div>
+          <span className="mb-1.5 block text-xs font-medium text-mute">Reach it by (optional)</span>
+          <DateField value={targetDate} onChange={setTargetDate} label="Reach it by" placeholder="No date" clearable />
+        </div>
         <FormButtons
           onClose={onClose}
           valid={valid}

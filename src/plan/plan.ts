@@ -4,7 +4,7 @@ import { addDays } from '../game/dates';
 import { completionId, type DayChoice } from '../game/schedule';
 import { questReward, type RewardAmount } from '../game/xp';
 import { dayInMonth, monthOf } from '../money/format';
-import { activeSubscriptions, nextCharge } from '../money/subscriptions';
+import { activeSubscriptions, isFloating, nextCharge } from '../money/subscriptions';
 import { mealsFor } from './meals';
 
 /*
@@ -161,7 +161,7 @@ export function moneyDue(data: SaveData, date: DateStr): MoneyDue[] {
     }
   }
   for (const s of activeSubscriptions(data)) {
-    if (nextCharge(s, date) === date) {
+    if (!isFloating(s) && nextCharge(s, date) === date) {
       due.push({ id: s.id, name: s.name, amount: s.amount, kind: 'expense', onCard: s.paidWith === 'card' });
     }
   }

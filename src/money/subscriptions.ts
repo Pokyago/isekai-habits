@@ -14,7 +14,10 @@ export const chargeType = (sub: Pick<Subscription, 'type'>): ChargeType => sub.t
 export const chargeCategory = (sub: Pick<Subscription, 'type' | 'category'>): string =>
   sub.category ?? (chargeType(sub) === 'bill' ? 'bills' : 'subscriptions');
 
-/** The first charge date on or after `from`. Charges before the anchor date don't exist. */
+/** True when it is paid at some point in the month or year, with no set day. */
+export const isFloating = (sub: Pick<Subscription, 'floating'>): boolean => sub.floating === true;
+
+/** The first charge date on or after `from`. Charges before the anchor date don't exist. Only for ones with a set day. */
 export function nextCharge(sub: Pick<Subscription, 'anchor' | 'cycle'>, from: DateStr): DateStr {
   const step = sub.cycle === 'yearly' ? 12 : 1;
   const day = Number(sub.anchor.slice(8));
@@ -60,11 +63,19 @@ export function subscriptionTotals(data: SaveData, type: ChargeType = 'subscript
   return totals;
 }
 
-/** Active ones with their next charge date, soonest first. Without a type, both kinds together. */
+/** Active ones paid on a set day, with their next charge date, soonest first. Without a type, both kinds together. */
 export function upcomingCharges(data: SaveData, today: DateStr, type?: ChargeType): { sub: Subscription; date: DateStr }[] {
   return activeSubscriptions(data, type)
+    .filter((sub) => !isFloating(sub))
     .map((sub) => ({ sub, date: nextCharge(sub, today) }))
     .sort((a, b) => (a.date === b.date ? a.sub.name.localeCompare(b.sub.name) : a.date < b.date ? -1 : 1));
+}
+
+/** Active ones with no set day, monthly before yearly, then by name. */
+export function floatingCharges(data: SaveData, type?: ChargeType): Subscription[] {
+  return activeSubscriptions(data, type)
+    .filter(isFloating)
+    .sort((a, b) => (a.cycle === b.cycle ? a.name.localeCompare(b.name) : a.cycle === 'monthly' ? -1 : 1));
 }
 
 export interface FixedCosts {

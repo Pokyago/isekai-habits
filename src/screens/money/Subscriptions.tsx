@@ -1,5 +1,6 @@
-import { CreditCard, Landmark, Plus, Trash2 } from 'lucide-react';
+import { CalendarOff, CreditCard, Landmark, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import { Button, Empty, Field, Modal, Panel, Segmented, inputClass } from '../../components/ui';
 import { useGame } from '../../data/store';
 import type { Subscription } from '../../data/types';
@@ -9,6 +10,8 @@ import { amountText, parseAmount } from '../../money/format';
 import {
   chargeCategory,
   fixedCosts,
+  floatingCharges,
+  isFloating,
   nextCharge,
   perMonth,
   subscriptionTotals,
@@ -42,6 +45,8 @@ const WORDS: Record<
     placeholder: string;
     notePlaceholder: string;
     dateLabel: string;
+    /** The list of the ones with no set day. */
+    anyDay: string;
     still: string;
     stillHint: string;
   }
@@ -59,6 +64,7 @@ const WORDS: Record<
     placeholder: 'e.g. Netflix, iCloud+',
     notePlaceholder: 'e.g. family plan, shared with Ana',
     dateLabel: 'Next charge date',
+    anyDay: 'Charged on no set day',
     still: 'Still subscribed',
     stillHint: '(untick when you cancel, to keep it on record)',
   },
@@ -75,6 +81,7 @@ const WORDS: Record<
     placeholder: 'e.g. Japanese lessons, gym, dog’s bath',
     notePlaceholder: 'e.g. twice a week, paid by Pix',
     dateLabel: 'Next date it is due',
+    anyDay: 'Paid on no set day',
     still: 'Still paying this',
     stillHint: '(untick when it stops, to keep it on record)',
   },
@@ -175,8 +182,9 @@ export function MonthlyExpenses() {
         <Charges type="bill" />
       </div>
       <p className="max-w-3xl text-xs text-mute">
-        Only the ones set to “Bank: add the entry” put an entry in your account on their day. The others are just
-        listed here, so nothing is counted twice with your card bill or an imported statement.
+        Only the ones set to “Bank: add the entry” put an entry in your account on their day. The others, and
+        everything with no set day, are just listed here, so nothing is counted twice with your card bill or an
+        imported statement.
       </p>
     </div>
   );
@@ -189,6 +197,7 @@ function Charges({ type }: { type: ChargeType }) {
 
   const totals = useMemo(() => subscriptionTotals(data, type), [data, type]);
   const upcoming = useMemo(() => upcomingCharges(data, today, type), [data, today, type]);
+  const anyDay = useMemo(() => floatingCharges(data, type), [data, type]);
   const ended = useMemo(
     () =>
       Object.values(data.subscriptions)
@@ -276,6 +285,43 @@ function Charges({ type }: { type: ChargeType }) {
         </Panel>
       )}
 
+      {anyDay.length > 0 && (
+        <Panel title={words.anyDay}>
+          <ul className="space-y-1">
+            {anyDay.map((sub) => (
+              <li key={sub.id}>
+                <button
+                  type="button"
+                  onClick={() => setEditing(sub)}
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raise"
+                >
+                  <span
+                    className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge text-mute"
+                    title={PAID_WITH[sub.paidWith]}
+                  >
+                    {sub.paidWith === 'card' ? <CreditCard size={16} /> : <Landmark size={16} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{sub.name}</span>
+                    <span className="block truncate text-[11px] text-mute">
+                      {sub.cycle === 'yearly' ? 'Some time each year' : 'Some time each month'}
+                      {type === 'bill' ? ` · ${categoryName(chargeCategory(sub))}` : ''}
+                      {sub.note ? ` · ${sub.note}` : ''}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-semibold tabular-nums">{fmt(sub.amount)}</span>
+                    {sub.cycle === 'yearly' && (
+                      <span className="block text-[11px] text-mute tabular-nums">{fmt(perMonth(sub))} a month</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+
       {ended.length > 0 && (
         <Panel title={words.ended}>
           <ul className="space-y-1">
@@ -313,7 +359,8 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
   const [amountField, setAmountField] = useState(sub ? amountText(sub.amount, currency) : '');
   const [cycle, setCycle] = useState<Subscription['cycle']>(sub?.cycle ?? 'monthly');
   // When editing, show the upcoming charge rather than whichever past date was first entered.
-  const [anchor, setAnchor] = useState(sub ? nextCharge(sub, today) : today);
+  const [floating, setFloating] = useState(sub ? isFloating(sub) : false);
+  const [anchor, setAnchor] = useState(sub && !isFloating(sub) ? nextCharge(sub, today) : today);
   // A bill is usually paid from the account and shows up in the statement; a subscription usually sits on the card.
   const [paidWith, setPaidWith] = useState<Subscription['paidWith']>(sub?.paidWith ?? (isBill ? 'manual' : 'card'));
   const [active, setActive] = useState(sub?.active ?? true);
@@ -325,7 +372,9 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
 
   const amount = amountField.trim() === '' ? null : parseAmount(amountField, currency);
   const valid = name.trim() !== '' && amount !== null && amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(anchor);
-  const next = valid ? nextCharge({ anchor, cycle }, today) : null;
+  const next = valid && !floating ? nextCharge({ anchor, cycle }, today) : null;
+  // With no day to add an entry on, it can only be tracked.
+  const paid = floating && paidWith === 'bank' ? 'manual' : paidWith;
 
   return (
     <Modal title={sub ? words.editTitle : words.newTitle} onClose={onClose}>
@@ -335,7 +384,7 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
           e.preventDefault();
           if (!valid) return;
           saveSubscription(
-            { name, amount: amount!, cycle, anchor, paidWith, active, note, ...(isBill ? { type: 'bill' as const, category } : {}) },
+            { name, amount: amount!, cycle, anchor, floating, paidWith: paid, active, note, ...(isBill ? { type: 'bill' as const, category } : {}) },
             sub?.id,
           );
           onClose();
@@ -384,30 +433,54 @@ function ChargeForm({ type, sub, onClose }: { type: ChargeType; sub?: Subscripti
           </Field>
         )}
 
-        <Field label={words.dateLabel}>
-          <input type="date" className={inputClass} value={anchor} onChange={(e) => setAnchor(e.target.value)} />
-        </Field>
-        {next && next !== anchor && (
-          <p className="-mt-2 text-xs text-mute">That date has passed, so the next one is {formatLong(next)}.</p>
-        )}
+        <div>
+          <span className="mb-1.5 block text-xs font-medium text-mute">When is it paid?</span>
+          <Segmented<'day' | 'any'>
+            label="When it is paid"
+            value={floating ? 'any' : 'day'}
+            onChange={(v) => setFloating(v === 'any')}
+            options={[
+              { value: 'day', label: 'On a set day' },
+              { value: 'any', label: 'No set day' },
+            ]}
+          />
+          {floating ? (
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs text-mute">
+              <CalendarOff size={14} className="mt-px shrink-0" aria-hidden />
+              Counted in your fixed costs every {cycle === 'yearly' ? 'year' : 'month'}, with no due date. It isn’t
+              shown on a day of the Plan page.
+            </p>
+          ) : (
+            <div className="mt-2">
+              <span className="mb-1.5 block text-xs font-medium text-mute">{words.dateLabel}</span>
+              <DateField value={anchor} onChange={setAnchor} label={words.dateLabel} />
+              {next && next !== anchor && (
+                <p className="mt-1.5 text-xs text-mute">That date has passed, so the next one is {formatLong(next)}.</p>
+              )}
+            </div>
+          )}
+        </div>
 
         <div>
           <span className="mb-1.5 block text-xs font-medium text-mute">Paid with</span>
           <Segmented<Subscription['paidWith']>
             label="Paid with"
-            value={paidWith}
+            value={paid}
             onChange={setPaidWith}
             options={[
               { value: 'card', label: 'Credit card' },
-              { value: 'manual', label: 'Bank: just track' },
-              { value: 'bank', label: 'Bank: add the entry' },
+              { value: 'manual', label: floating ? 'Bank account' : 'Bank: just track' },
+              // An entry can only be added by itself when there is a day to add it on.
+              ...(floating ? [] : [{ value: 'bank' as const, label: 'Bank: add the entry' }]),
             ]}
           />
           <p className="mt-1.5 text-xs text-mute">
-            {paidWith === 'card'
+            {paid === 'card'
               ? 'Only tracked here. The charge is already inside your card bill, so no entry is added.'
-              : paidWith === 'manual'
-                ? 'Only tracked here. Choose this if you import your bank statement or record the payment yourself, so it isn’t counted twice.'
+              : paid === 'manual'
+                ? floating
+                  ? 'Only tracked here. Record the payment yourself when you make it, or let it come in with your bank statement.'
+                  : 'Only tracked here. Choose this if you import your bank statement or record the payment yourself, so it isn’t counted twice.'
                 : 'An entry is added to your bank account on each date it is due, starting with the next one.'}
           </p>
         </div>

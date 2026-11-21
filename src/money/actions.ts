@@ -16,7 +16,7 @@ import { balance, debtRemaining, goalSaved, monthSummary } from './calc';
 import { ADJUSTMENT } from './categories';
 import { addMonths, dayInMonth, monthOf } from './format';
 import type { ImportRow } from './statement';
-import { chargeCategory, nextCharge } from './subscriptions';
+import { chargeCategory, isFloating, nextCharge } from './subscriptions';
 
 /*
  * Every change to the money records goes through these functions. Like the game
@@ -164,6 +164,8 @@ export interface SubscriptionInput {
   cycle: 'monthly' | 'yearly';
   /** A date it is charged on; usually the next one. */
   anchor: DateStr;
+  /** Paid at some point in the month or year, with no set day. */
+  floating?: boolean;
   paidWith: 'bank' | 'card' | 'manual';
   active: boolean;
   note: string;
@@ -181,9 +183,12 @@ export function saveSubscription(
 ): SaveData {
   if (!input.name.trim() || !(input.amount > 0)) return data;
   const prev = id ? data.subscriptions[id] : undefined;
+  const { floating, ...rest } = input;
   const sub: Subscription = {
     id: prev?.id ?? newId(),
-    ...input,
+    ...rest,
+    // Without a day there is no day to add an entry on: it can only be tracked.
+    ...(floating ? { floating: true as const, paidWith: rest.paidWith === 'bank' ? ('manual' as const) : rest.paidWith } : {}),
     // What kind of thing it is never changes after it is added.
     type: prev ? prev.type : input.type,
     name: input.name.trim(),
@@ -336,7 +341,7 @@ function addDueSubscriptions(data: SaveData, today: DateStr): SaveData {
   let transactions = data.transactions;
 
   for (const s of Object.values(data.subscriptions)) {
-    if (s.deleted || !s.active || s.paidWith !== 'bank') continue;
+    if (s.deleted || !s.active || s.paidWith !== 'bank' || isFloating(s)) continue;
     const from = s.since > data.money.openingDate ? s.since : data.money.openingDate;
     for (let date = nextCharge(s, from); date <= today; date = nextCharge(s, addDays(date, 1))) {
       const id = `sub|${s.id}|${s.cycle === 'yearly' ? date.slice(0, 4) : date.slice(0, 7)}`;

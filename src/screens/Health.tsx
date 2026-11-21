@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { DateField } from '../components/DateField';
 import { CHART_COLORS, LineChart, type ChartSeries } from '../components/LineChart';
 import { Button, Empty, Field, Modal, Panel, Segmented, inputBase, inputClass } from '../components/ui';
 import { useGame } from '../data/store';
@@ -374,9 +375,10 @@ function SleepPanel() {
           if (hours !== null && dateOk) saveSleep(date, hours);
         }}
       >
-        <Field label="Morning you woke up">
-          <input type="date" className={`${inputBase} w-40`} value={date} max={today} onChange={(e) => pick(e.target.value)} />
-        </Field>
+        <div>
+          <span className="mb-1.5 block text-xs font-medium text-mute">Morning you woke up</span>
+          <DateField value={date} onChange={pick} max={today} label="Morning you woke up" className="w-48" />
+        </div>
         <Field label="Slept for">
           <input
             className={`${inputBase} w-28 ${text.trim() !== '' && hours === null ? 'border-danger' : ''}`}
@@ -562,9 +564,10 @@ function CheckInForm({ entry, onClose }: { entry?: HealthEntry; onClose(): void 
         }}
       >
         <p className="text-sm text-mute">Fill in what you measured and leave the rest empty.</p>
-        <Field label="Date">
-          <input type="date" className={inputClass} value={date} max={today} disabled={!!entry} onChange={(e) => setDate(e.target.value)} />
-        </Field>
+        <div>
+          <span className="mb-1.5 block text-xs font-medium text-mute">Date</span>
+          <DateField value={date} onChange={setDate} max={today} disabled={!!entry} label="Date" />
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Weight (kg)">
