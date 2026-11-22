@@ -35,7 +35,8 @@ const LIBRARY: Record<string, Row[]> = {
     ['In bed by 11pm', M],
     ['Wake up at the same time', M],
     ['Sleep at least 7 hours', M],
-    ['No screens 30 minutes before bed', M],
+    // Reading a book on a tablet is fine by this one; it is the scrolling and watching that keep you up.
+    ['No scrolling or videos 30 minutes before bed', M],
     ['No phone in bed', M],
     ['No caffeine after 2pm', E],
     ['Wind-down routine before bed', E],
@@ -324,6 +325,7 @@ for (const [name, category] of [
   ['study or practise a skill for 30 minutes', 'study'],
   ['clear the inbox', 'work'],
   ['track today’s spending', 'finance'],
+  ['no screens 30 minutes before bed', 'sleep'],
 ] as const) {
   if (!CATEGORY_BY_NAME.has(name)) CATEGORY_BY_NAME.set(name, category);
 }
