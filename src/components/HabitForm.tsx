@@ -30,6 +30,7 @@ export function HabitForm({
   const [times, setTimes] = useState(habit?.schedule.kind === 'perWeek' ? habit.schedule.times : 3);
   const [target, setTarget] = useState(habit?.target ?? 1);
   const [why, setWhy] = useState(habit?.why ?? '');
+  const [important, setImportant] = useState(habit?.important === true);
 
   const valid = name.trim().length > 0 && (kind === 'perWeek' || days.length > 0);
 
@@ -45,6 +46,7 @@ export function HabitForm({
       schedule: kind === 'weekdays' ? { kind, days } : { kind, times },
       target,
       why,
+      important,
     });
     onClose();
   };
@@ -78,6 +80,14 @@ export function HabitForm({
             maxLength={140}
           />
         </Field>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-0.5 size-4" checked={important} onChange={(e) => setImportant(e.target.checked)} />
+          <span>
+            One of my most important habits
+            <span className="block text-xs text-mute">A copy of it is kept at the top of Today. It stays in its own list too.</span>
+          </span>
+        </label>
 
         <Field label="Category">
           <select

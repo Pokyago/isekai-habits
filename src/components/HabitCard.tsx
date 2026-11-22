@@ -1,4 +1,4 @@
-import { Check, Flame, Minus } from 'lucide-react';
+import { Check, Flame, Minus, Star } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { CLASSES, DIFFICULTIES, STATS, statColor } from '../data/meta';
 import { useGame } from '../data/store';
@@ -26,6 +26,8 @@ export function HabitCard({
   delay?: number;
 }) {
   const setHabitCount = useGame((s) => s.setHabitCount);
+  const setImportant = useGame((s) => s.setImportant);
+  const important = habit.important === true;
   const completion = data.completions[completionId(habit.id, date)];
   const count = completion?.count ?? 0;
   const done = completion?.done ?? false;
@@ -147,6 +149,22 @@ export function HabitCard({
           <Minus size={16} />
         </button>
       )}
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setImportant(habit.id, !important);
+        }}
+        aria-pressed={important}
+        aria-label={important ? `Take ${habit.name} off the most important` : `Make ${habit.name} one of the most important`}
+        title={important ? 'One of your most important: click to take it off the top' : 'Keep a copy at the top, with the most important'}
+        className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-void/60 ${
+          important ? 'text-gold' : 'text-mute/40 hover:text-gold'
+        }`}
+      >
+        <Star size={16} fill={important ? 'currentColor' : 'none'} />
+      </button>
 
       <div className="flex shrink-0 flex-col items-end gap-1 text-xs">
         <span className={done ? 'font-semibold text-gold' : 'text-mute'}>+{xp} XP</span>

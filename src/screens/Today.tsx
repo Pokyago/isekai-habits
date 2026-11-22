@@ -1,4 +1,4 @@
-import { CalendarClock, Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Plus, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { HabitCard } from '../components/HabitCard';
 import { MealTick, PlanTick } from '../components/PlanBits';
@@ -35,6 +35,7 @@ function HabitGroups({
   date,
   hideDone,
   planned = false,
+  important = false,
   slipped,
 }: {
   habits: Habit[];
@@ -42,14 +43,18 @@ function HabitGroups({
   hideDone: boolean;
   /** Shows them as one group: the habits picked for the day on the Plan page. */
   planned?: boolean;
+  /** Shows them as one group: the copy of the most important habits kept at the top. */
+  important?: boolean;
   /** Habits missed yesterday, to be pointed out. */
   slipped?: Set<string>;
 }) {
   const data = useGame((s) => s.data);
   const derived = useDerived();
+  // One group under a heading of its own, in gold.
+  const special = planned ? 'Planned for the day' : important ? 'Most important' : null;
   const groups: { id: string; habits: Habit[] }[] = [];
   for (const h of habits) {
-    const id = planned ? 'planned' : categoryOf(h);
+    const id = special ? 'special' : categoryOf(h);
     const last = groups[groups.length - 1];
     if (last && last.id === id) last.habits.push(h);
     else groups.push({ id, habits: [h] });
@@ -65,13 +70,16 @@ function HabitGroups({
         return (
           <section key={g.id}>
             <header className="mb-2 flex items-center gap-3 px-1">
-              <h3 className={`text-[11px] font-semibold tracking-wide uppercase ${complete || planned ? 'text-gold' : 'text-mute'}`}>
-                {planned ? 'Planned for the day' : habitCategory(g.id).name}
+              <h3
+                className={`flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase ${complete || special ? 'text-gold' : 'text-mute'}`}
+              >
+                {important && <Star size={12} fill="currentColor" />}
+                {special ?? habitCategory(g.id).name}
               </h3>
               <Bar
                 value={done}
                 max={g.habits.length}
-                color={complete || planned ? 'var(--color-gold)' : statColor(habitCategory(g.id).stat)}
+                color={complete || special ? 'var(--color-gold)' : statColor(habitCategory(g.id).stat)}
                 className="h-1 max-w-32 flex-1"
               />
               <span className={`text-[11px] tabular-nums ${complete ? 'font-semibold text-gold' : 'text-mute'}`}>
@@ -339,6 +347,8 @@ export function Today({
   const choices = useMemo(() => habitChoices(data, date), [data, date]);
   const isPlanned = (h: Habit) => choices.get(h.id) === 'pick' || choices.get(h.id) === 'extra';
   const planned = due.filter(isPlanned);
+  // The most important ones get a copy at the top; they stay in their own groups below as well.
+  const important = due.filter((h) => h.important);
   const scheduled = due.filter((h) => h.schedule.kind === 'weekdays');
   const weekly = due.filter((h) => h.schedule.kind === 'perWeek' && !isPlanned(h));
   const skipped = Object.values(data.habits).filter(
@@ -421,6 +431,17 @@ export function Today({
               <Empty>Everything scheduled is done.</Empty>
             ) : (
               <div className="space-y-5">
+                {important.length > 0 && (
+                  <div className="rounded-xl border border-gold/30 bg-gold/5 p-3">
+                    <HabitGroups habits={important} date={date} hideDone={hideDone} slipped={slipped} important />
+                  </div>
+                )}
+                {important.length === 0 && scheduled.length >= 4 && offset === 0 && (
+                  <p className="flex items-center gap-1.5 px-1 text-xs text-mute">
+                    <Star size={12} className="shrink-0" /> Click the star on a habit to keep a copy of it up here, with your most important
+                    ones.
+                  </p>
+                )}
                 {planned.length > 0 && <HabitGroups habits={planned} date={date} hideDone={hideDone} slipped={slipped} planned />}
                 <HabitGroups habits={scheduled.filter((h) => !isPlanned(h))} date={date} hideDone={hideDone} slipped={slipped} />
               </div>

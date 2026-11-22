@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Library, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Library, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { HabitForm } from '../components/HabitForm';
 import { TemplatePicker } from '../components/TemplatePicker';
@@ -15,6 +15,7 @@ export function Habits() {
   const habits = useGame((s) => s.data.habits);
   const saveHabit = useGame((s) => s.saveHabit);
   const setArchived = useGame((s) => s.setArchived);
+  const setImportant = useGame((s) => s.setImportant);
   const deleteHabit = useGame((s) => s.deleteHabit);
   const [editing, setEditing] = useState<Habit | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Habit | null>(null);
@@ -67,6 +68,14 @@ export function Habits() {
                       {h.target > 1 && <Chip>{h.target}× a day</Chip>}
                     </div>
                   </div>
+                  <IconButton
+                    label={h.important ? `Take ${h.name} off the most important` : `Make ${h.name} one of the most important`}
+                    aria-pressed={h.important === true}
+                    onClick={() => setImportant(h.id, !h.important)}
+                    className={h.important ? 'text-gold' : ''}
+                  >
+                    <Star size={16} fill={h.important ? 'currentColor' : 'none'} />
+                  </IconButton>
                   <IconButton label={`Edit ${h.name}`} onClick={() => setEditing(h)}>
                     <Pencil size={16} />
                   </IconButton>

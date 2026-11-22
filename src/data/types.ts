@@ -30,6 +30,8 @@ export interface Habit {
   target: number;
   /** Why you want this habit, in your own words. Shown when it slipped, or when you are about to skip it. */
   why?: string;
+  /** One of the most important ones: a copy of it is kept at the top of Today. */
+  important?: true;
   startDate: DateStr;
   archivedOn: DateStr | null;
   deleted: boolean;

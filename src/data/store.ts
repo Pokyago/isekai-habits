@@ -39,6 +39,8 @@ interface GameState {
   saveHabit(input: HabitInput, id?: string): void;
   addTemplates(templates: HabitTemplate[]): void;
   setArchived(id: string, archived: boolean): void;
+  /** Marks a habit as one of the most important: a copy of it is kept at the top of Today. */
+  setImportant(id: string, important: boolean): void;
   deleteHabit(id: string): void;
   setHabitCount(habitId: string, date: DateStr, count: number): void;
   addQuest(title: string, stat: StatKey, difficulty: Difficulty): void;
@@ -189,6 +191,9 @@ export const useGame = create<GameState>((set, get) => {
     },
     addTemplates(templates) {
       apply((d) => actions.addTemplates(d, templates, todayStr(), Date.now()));
+    },
+    setImportant(id, important) {
+      apply((d) => actions.setImportant(d, id, important, Date.now()));
     },
     setArchived(id, archived) {
       apply((d) => actions.setArchived(d, id, archived, todayStr(), Date.now()));

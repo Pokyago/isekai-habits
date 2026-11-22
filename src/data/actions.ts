@@ -42,6 +42,8 @@ export interface HabitInput {
   target: number;
   /** Why you want the habit. Empty or left out for none. */
   why?: string;
+  /** One of the most important ones. Left out, an existing habit keeps what it had. */
+  important?: boolean;
 }
 
 export function createHero(
@@ -110,6 +112,8 @@ function normalise(input: HabitInput): HabitInput {
     schedule,
     target: Math.min(99, Math.max(1, Math.round(input.target))),
     why: input.why?.trim() || undefined,
+    // Kept as it is in the save: there, a habit either has the mark or doesn't have the field.
+    ...(input.important === undefined ? {} : { important: input.important || undefined }),
   };
 }
 
@@ -122,9 +126,13 @@ export function saveHabit(
 ): SaveData {
   const clean = normalise(input);
   const prev = id ? data.habits[id] : undefined;
+  const { important, ...rest } = clean;
+  // The form always says whether it is important; anything else that saves a habit leaves the mark alone.
+  const mark = 'important' in clean ? (important ? { important: true as const } : {}) : prev?.important ? { important: true as const } : {};
+  const { important: _had, ...kept } = prev ?? ({} as Partial<Habit>);
   const habit: Habit = prev
-    ? { ...prev, ...clean, updatedAt: stamp(prev, now) }
-    : { id: newId(), ...clean, startDate: today, archivedOn: null, deleted: false, updatedAt: now };
+    ? { ...(kept as Omit<Habit, 'important'>), ...rest, ...mark, updatedAt: stamp(prev, now) }
+    : { id: newId(), ...rest, ...mark, startDate: today, archivedOn: null, deleted: false, updatedAt: now };
   return { ...data, habits: { ...data.habits, [habit.id]: habit } };
 }
 
@@ -135,6 +143,15 @@ export function setArchived(data: SaveData, id: string, archived: boolean, today
   const habit: Habit = archived
     ? { ...prev, archivedOn: today, updatedAt: stamp(prev, now) }
     : { ...prev, archivedOn: null, startDate: today, updatedAt: stamp(prev, now) };
+  return { ...data, habits: { ...data.habits, [id]: habit } };
+}
+
+/** Marks a habit as one of the most important, or takes the mark away. */
+export function setImportant(data: SaveData, id: string, important: boolean, now: number): SaveData {
+  const prev = data.habits[id];
+  if (!prev || prev.deleted || !!prev.important === important) return data;
+  const { important: _had, ...rest } = prev;
+  const habit: Habit = { ...rest, ...(important ? { important: true as const } : {}), updatedAt: stamp(prev, now) };
   return { ...data, habits: { ...data.habits, [id]: habit } };
 }
 
