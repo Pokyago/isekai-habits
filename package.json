@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "icons": "node scripts/gen-icons.mjs",
+    "pages": "node scripts/publish-pages.mjs",
     "exe": "npm run build && desktop\\build.bat"
   },
   "dependencies": {
